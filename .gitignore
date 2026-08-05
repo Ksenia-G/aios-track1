@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment
+.venv/
+.env
+.env.*
+
+# Build output
+build/
+dist/
+
+# Generated project output
+artifacts/
+reports/
+data/raw/
+data/processed/
+*.log
+*.tmp
+
+# Operating system
+.DS_Store
