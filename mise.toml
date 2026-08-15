@@ -31,3 +31,8 @@ uv run ruff check .
 uv run pytest
 git diff --check
 """
+
+[tasks.exp002]
+description = "EXP-002: boundary search and transfer combinations (full OPM + CHDD)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments.exp002_cli"
