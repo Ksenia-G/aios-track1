@@ -26,3 +26,7 @@ data/processed/
 
 # Operating system
 .DS_Store
+
+# Validation pipeline run output
+output/
+runtime/

@@ -1,0 +1,40 @@
+{
+  "case_id": "model_y_validation",
+  "track": 1,
+  "management_start_date": "2014-01-01",
+  "management_end_date": "2015-12-01",
+  "history": {
+    "deck_root": "/Users/alex/Developer/aios-pret0-002-sandbox/compat_p002",
+    "data_file": "MODEL_Y.DATA",
+    "schedule_include": "INCLUDE/DemoSpe_002_2_sch.inc"
+  },
+  "constraints": {
+    "producer_wlpr_max": 500.0,
+    "allowed_producer_controls": ["LRAT"],
+    "allowed_injector_controls": ["RATE"],
+    "allow_producer_to_injector": false,
+    "producer_bhp_min": 50.0,
+    "injector_bhp_max": 300.0,
+    "injector_rate_max": null,
+    "field_injection_rate_max": null
+  },
+  "economics": {
+    "calculator_root": "/Users/alex/Developer/aios-pret0-002-sandbox/official_003b/chdd_pkg/CHDD_PYTHON",
+    "norms_workbook": "/Users/alex/Developer/aios-pret0-002-sandbox/official_003b/chdd_pkg/CHDD_PYTHON/input/Нормативы_ЧДД.xlsx",
+    "economic_start_date": "2014-01-01",
+    "oil_density_t_per_sm3": 0.832,
+    "water_density_t_per_sm3": 1.0128,
+    "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE"
+  },
+  "simulator": {
+    "docker_image": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
+    "flow_command": "flow",
+    "extra_args": [],
+    "timeout_seconds": 1800
+  },
+  "acceptance": {
+    "baseline_npv_mln_rub": 1030.877696,
+    "npv_tolerance_mln_rub": 1e-06,
+    "reference": "OFFICIAL-003B normalized baseline, NOT_OFFICIAL_PENDING_TNAV_REFERENCE"
+  }
+}
