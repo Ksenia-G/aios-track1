@@ -1,0 +1,172 @@
+{
+  "scenario": {
+    "scenario_id": "EXP001_BASELINE",
+    "block": 0,
+    "donor": "",
+    "receiver": "",
+    "fraction": 0.0
+  },
+  "status": "PASS",
+  "simulation_status": "PASS",
+  "constraints_status": "PASS",
+  "chdd_status": "PASS",
+  "schedule_sha256": "7662d10495796ace6b0d20df404ca68932b2894f367de2062c232cbe3e01c399",
+  "wall_seconds": 84.83,
+  "simulation": {
+    "status": "PASS",
+    "exit_code": 0,
+    "wall_seconds": 84.611,
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "-v",
+      "/Users/alex/Developer/worktrees/aios-exp-001/experiments/exp001/runtime/EXP001_BASELINE/workspace:/data",
+      "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
+      "flow",
+      "/data/MODEL_Y.DATA",
+      "--output-dir=/data/OUT"
+    ],
+    "log": "flow.log",
+    "output_files": [
+      "MODEL_Y.DBG",
+      "MODEL_Y.EGRID",
+      "MODEL_Y.ESMRY",
+      "MODEL_Y.INIT",
+      "MODEL_Y.PRT",
+      "MODEL_Y.SMSPEC",
+      "MODEL_Y.UNRST",
+      "MODEL_Y.UNSMRY"
+    ],
+    "report_steps": 108,
+    "final_date": "2015-12-01",
+    "warning_count": 1954,
+    "distinct_warnings": [
+      "Warning: Unsupported keywords or keyword items:",
+      "Warning: Problem with COMPDAT keyword",
+      "Warning: Unhandled summary keyword FMWPT",
+      "Warning: Unhandled summary keyword WTPRAQW",
+      "Warning: Unhandled summary keyword WTPRFW",
+      "Warning: Unhandled summary keyword WTPRMW",
+      "Warning: Unhandled summary keyword FTPRAQW",
+      "Warning: Unhandled summary keyword FTPRFW",
+      "Warning: Unhandled summary keyword FTPRMW",
+      "Warning: Unhandled summary keyword FTPRFO",
+      "Warning: Unhandled summary keyword FTPRMO",
+      "Warning: Unhandled summary keyword GTPRAQW",
+      "Warning: Unhandled summary keyword GTPRFW",
+      "Warning: Unhandled summary keyword GTPRMW"
+    ],
+    "errors": []
+  },
+  "economics": {
+    "calculator_version": "7.0.2-negative-row-filter",
+    "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+    "npv_mln_rub": 1030.8776958837277,
+    "profitability_index": 1.2188373984248921,
+    "economic_month_count": 23,
+    "months_by_year": {
+      "2014": 12,
+      "2015": 11
+    },
+    "economic_start_date": "2014-01-01",
+    "last_economic_month": "2015-11",
+    "source_max_date": "2015-11-01",
+    "oil_kt_total": 213.69528122680654,
+    "liquid_kt_total": 1976.6091847774,
+    "injection_k_total": 1962.9611875,
+    "active_well_months": 1127,
+    "events": {
+      "pump": 1,
+      "stop": 0,
+      "start": 0,
+      "conversion": 0
+    },
+    "excluded_negative_rows": 0,
+    "duplicate_well_months": 196,
+    "invalid_dates": 0,
+    "ignored_blank_wells": 0,
+    "warnings": [
+      "Найдены дубли «скважина-месяц»: 196. Проверьте исходные данные."
+    ]
+  },
+  "gates": {
+    "validation_001": [
+      {
+        "gate_id": "well_exists",
+        "status": "PASS",
+        "detail": "49 controlled well(s) known to the deck",
+        "violations": []
+      },
+      {
+        "gate_id": "date_valid",
+        "status": "PASS",
+        "detail": "24 step date(s) inside the window",
+        "violations": []
+      },
+      {
+        "gate_id": "chronological_dates",
+        "status": "PASS",
+        "detail": "step dates strictly increasing",
+        "violations": []
+      },
+      {
+        "gate_id": "history_untouched",
+        "status": "PASS",
+        "detail": "no step precedes the management start",
+        "violations": []
+      },
+      {
+        "gate_id": "control_type_allowed",
+        "status": "PASS",
+        "detail": "all control modes allowed by the case",
+        "violations": []
+      },
+      {
+        "gate_id": "no_forbidden_conversion",
+        "status": "PASS",
+        "detail": "no well changes role inside the window",
+        "violations": []
+      },
+      {
+        "gate_id": "rate_limits",
+        "status": "PASS",
+        "detail": "producer LRAT within 500.0, injector rates non-negative",
+        "violations": []
+      },
+      {
+        "gate_id": "finite_targets",
+        "status": "PASS",
+        "detail": "all numeric targets finite",
+        "violations": []
+      },
+      {
+        "gate_id": "bhp_limits",
+        "status": "PASS",
+        "detail": "BHP limits respected",
+        "violations": []
+      },
+      {
+        "gate_id": "field_injection_limit",
+        "status": "PASS",
+        "detail": "no field limit configured",
+        "violations": []
+      },
+      {
+        "gate_id": "no_duplicate_control",
+        "status": "PASS",
+        "detail": "one control per well per date",
+        "violations": []
+      }
+    ],
+    "experiment": [
+      {
+        "gate_id": "baseline_is_unmodified",
+        "status": "PASS",
+        "detail": "control run reproduces the baseline schedule",
+        "violations": []
+      }
+    ]
+  },
+  "notes": []
+}

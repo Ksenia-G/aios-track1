@@ -95,6 +95,22 @@ class SummaryData:
             raise SummaryReadError(f"summary has no vector {vector} for well {well}") from None
         return float(self._params[step][column])
 
+    def has_field_vector(self, vector: str) -> bool:
+        return vector in self._field_index
+
+    def field_value(self, vector: str, step: int) -> float:
+        try:
+            column = self._field_index[vector]
+        except KeyError:
+            raise SummaryReadError(f"summary has no field vector {vector}") from None
+        return float(self._params[step][column])
+
+    def field_series(self, vector: str) -> tuple[float, ...]:
+        return tuple(self.field_value(vector, step) for step in range(self.report_steps))
+
+    def well_series(self, vector: str, well: str) -> tuple[float, ...]:
+        return tuple(self.well_value(vector, well, step) for step in range(self.report_steps))
+
     def missing_well_vectors(self, vectors: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(
             f"{vector}:{well}"

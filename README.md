@@ -24,6 +24,12 @@ mise run check
 mise run validation-demo
 ```
 
+Экран перераспределения закачки EXP-001 — [docs/exp001_injection_screen.md](docs/exp001_injection_screen.md):
+
+```bash
+mise run exp001
+```
+
 ## Работа с кодом
 
 Каждая задача выполняется в отдельной ветке и проходит через pull request. Ветка `main` напрямую не изменяется.

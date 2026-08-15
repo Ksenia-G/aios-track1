@@ -19,6 +19,11 @@ description = "Сквозной прогон: кейс -> расписание -
 env = { PYTHONPATH = "src" }
 run = "uv run python -m aios.pipeline"
 
+[tasks.exp001]
+description = "EXP-001: экран перераспределения закачки (полные прогоны OPM + ЧДД)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments"
+
 [tasks.check]
 run = """
 uv run ruff format --check .

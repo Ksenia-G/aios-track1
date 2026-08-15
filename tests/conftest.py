@@ -446,3 +446,21 @@ def mini_case(mini_case_dir: Path):
     from aios.cases import load_case
 
     return load_case(mini_case_dir / "case.json")
+
+
+# --- опорный кейс Model Y --------------------------------------------------
+
+
+@pytest.fixture
+def model_y_case():
+    """Настоящий кейс. Тест пропускается там, где лабораторной колоды нет."""
+
+    from aios.cases import load_case
+
+    case_path = REPO_ROOT / "cases" / "model_y_validation.json"
+    if not case_path.is_file():
+        pytest.skip("Model Y case file is not present")
+    case = load_case(case_path)
+    if not case.history.schedule_path.is_file():
+        pytest.skip("Model Y deck is not available in this environment")
+    return case

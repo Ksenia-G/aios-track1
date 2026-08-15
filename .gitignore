@@ -30,3 +30,6 @@ data/processed/
 # Validation pipeline run output
 output/
 runtime/
+
+# Experiment run output
+experiments/*/runtime/

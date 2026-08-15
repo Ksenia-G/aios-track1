@@ -42,7 +42,7 @@ from aios.schedule.generator import (
     render_schedule,
     schedule_sha256,
 )
-from aios.schedule.policy import DEFAULT_POLICY_ID, get_policy
+from aios.schedule.policy import DEFAULT_POLICY_ID, Policy, get_policy
 from aios.schedule.state import FieldState, reconstruct_state
 from aios.schedule.validator import ScheduleValidationReport, validate_schedule
 
@@ -265,16 +265,32 @@ def _write_json(path: Path, payload: Any) -> Path:
     return path
 
 
-def build_schedule_for_case(case: Case, *, policy_id: str) -> tuple[Schedule, FieldState, str, str]:
-    """Разобрать колоду, восстановить состояние и получить текст расписания."""
+def read_baseline_inputs(case: Case) -> tuple[FieldState, Schedule, str]:
+    """Состояние на начало окна, опорное расписание окна и текст истории."""
 
     start_date = parse_start_date(case.history.data_path.read_text(encoding="utf-8"))
     deck = parse_schedule_file(case.history.schedule_path, start_date=start_date)
     state = reconstruct_state(deck, case.management_start_date)
     baseline = deck.control_schedule(case.management_start_date, case.management_end_date)
-    schedule = get_policy(policy_id).plan(state, baseline)
-    history_text = deck.history_text(case.management_start_date)
-    schedule_text = render_schedule(schedule, case, policy_id=policy_id)
+    return state, baseline, deck.history_text(case.management_start_date)
+
+
+def build_schedule_for_case(
+    case: Case, *, policy_id: str | None = None, policy: Policy | None = None
+) -> tuple[Schedule, FieldState, str, str]:
+    """Разобрать колоду, восстановить состояние и получить текст расписания.
+
+    Политику можно задать идентификатором из реестра или готовым объектом --
+    второе нужно параметризованным политикам, которых в реестре нет и быть
+    не может, потому что их столько же, сколько вариантов воздействия.
+    """
+
+    if (policy is None) == (policy_id is None):
+        raise ValueError("pass exactly one of policy_id or policy")
+    resolved = policy if policy is not None else get_policy(str(policy_id))
+    state, baseline, history_text = read_baseline_inputs(case)
+    schedule = resolved.plan(state, baseline)
+    schedule_text = render_schedule(schedule, case, policy_id=resolved.policy_id)
     return schedule, state, schedule_text, history_text
 
 

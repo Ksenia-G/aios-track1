@@ -1,0 +1,13 @@
+{
+  "baseline_npv": 1030.8776958837277,
+  "scenario_count": 70,
+  "passed_count": 70,
+  "failed_count": 0,
+  "positive_npv_count": 47,
+  "best_scenario": "EXP001_B3_32_TO_4_F30",
+  "best_npv": 1051.6400268038235,
+  "best_delta_npv": 20.762330920095792,
+  "best_delta_pct": 2.014044052267241,
+  "parallelism": 4,
+  "wall_seconds": 2378.2
+}
