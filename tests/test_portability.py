@@ -152,7 +152,7 @@ def test_demo_cli_succeeds_without_external_resources(
     captured = capsys.readouterr()
 
     assert code == 0
-    assert "VERIFIED EXPERIMENT SNAPSHOT" in captured.out
+    assert "ПРОВЕРЕННЫЕ РЕЗУЛЬТАТЫ ВЫЧИСЛИТЕЛЬНЫХ ЭКСПЕРИМЕНТОВ" in captured.out
 
 
 # --- изоляция от других рабочих каталогов ----------------------------------

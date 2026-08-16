@@ -116,28 +116,34 @@
     "revenue_m": 790.0432140541989
   },
   "exp001_best": {
+    "candidate_runs": 70,
     "delta_npv_mln_rub": 20.762330920095792,
     "delta_npv_pct": 2.014044052267241,
     "evidence": "directional injection screen",
     "npv_mln_rub": 1051.6400268038235,
+    "reconciliation_runs": 0,
     "scenario_id": "EXP001_B3_32_TO_4_F30",
     "simulation_note": "70 candidate scenarios",
     "stage": "EXP-001"
   },
   "exp002_best": {
+    "candidate_runs": 62,
     "delta_npv_mln_rub": 136.10667332171602,
     "delta_npv_pct": 13.202989439502572,
     "evidence": "boundary search + combinations",
     "npv_mln_rub": 1166.9843692054437,
+    "reconciliation_runs": 0,
     "scenario_id": "EXP002_D_B2_41_TO_19_F40__B3_32_TO_4_F80__B4_7_TO_42_F90__B5_26_TO_2_F90",
     "simulation_note": "62 candidate scenarios",
     "stage": "EXP-002"
   },
   "exp003_best": {
+    "candidate_runs": 25,
     "delta_npv_mln_rub": 159.71569049851678,
     "delta_npv_pct": 15.493175488834229,
     "evidence": "robustness envelope",
     "npv_mln_rub": 1190.5933863822445,
+    "reconciliation_runs": 2,
     "scenario_id": "EXP003_D_COMP_ADD_42_100",
     "simulation_note": "25 candidate scenarios (+2 reconciliation)",
     "stage": "EXP-003"
@@ -190,37 +196,45 @@
   "pressure_floor_status": "NO OFFICIAL FLOOR SUPPLIED",
   "progression": [
     {
+      "candidate_runs": 1,
       "delta_npv_mln_rub": 0.0,
       "delta_npv_pct": 0.0,
       "evidence": "validated control run",
       "npv_mln_rub": 1030.8776958837277,
+      "reconciliation_runs": 0,
       "scenario_id": null,
       "simulation_note": "1 control run",
       "stage": "Baseline"
     },
     {
+      "candidate_runs": 70,
       "delta_npv_mln_rub": 20.762330920095792,
       "delta_npv_pct": 2.014044052267241,
       "evidence": "directional injection screen",
       "npv_mln_rub": 1051.6400268038235,
+      "reconciliation_runs": 0,
       "scenario_id": "EXP001_B3_32_TO_4_F30",
       "simulation_note": "70 candidate scenarios",
       "stage": "EXP-001"
     },
     {
+      "candidate_runs": 62,
       "delta_npv_mln_rub": 136.10667332171602,
       "delta_npv_pct": 13.202989439502572,
       "evidence": "boundary search + combinations",
       "npv_mln_rub": 1166.9843692054437,
+      "reconciliation_runs": 0,
       "scenario_id": "EXP002_D_B2_41_TO_19_F40__B3_32_TO_4_F80__B4_7_TO_42_F90__B5_26_TO_2_F90",
       "simulation_note": "62 candidate scenarios",
       "stage": "EXP-002"
     },
     {
+      "candidate_runs": 25,
       "delta_npv_mln_rub": 159.71569049851678,
       "delta_npv_pct": 15.493175488834229,
       "evidence": "robustness envelope",
       "npv_mln_rub": 1190.5933863822445,
+      "reconciliation_runs": 2,
       "scenario_id": "EXP003_D_COMP_ADD_42_100",
       "simulation_note": "25 candidate scenarios (+2 reconciliation)",
       "stage": "EXP-003"

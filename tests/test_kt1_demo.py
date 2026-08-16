@@ -162,17 +162,24 @@ def test_pressure_floor_is_declared_absent(snapshot) -> None:
 def test_limitation_banners_appear_in_the_rendered_output(snapshot) -> None:
     text = render(snapshot)
 
+    # Русская формулировка для человека и машинное значение рядом -- второе
+    # нужно, чтобы вывод оставался пригодным для сверки.
+    assert "ПРОИСХОЖДЕНИЕ РЕЗУЛЬТАТА:" in text
+    assert "неофициальное — ожидается сверка с tNavigator" in text
     assert PROVENANCE in text
+    assert "ВОДНЫЙ БАЛАНС:" in text
+    assert "точное правило требует подтверждения организатора" in text
     assert WATER_BALANCE_STATUS in text
-    assert PRESSURE_FLOOR_STATUS in text
+    assert "ОГРАНИЧЕНИЕ ПО ДАВЛЕНИЮ:" in text
+    assert "официальный минимальный порог не предоставлен" in text
 
 
 def test_rendering_never_claims_an_official_or_global_result(snapshot) -> None:
-    text = render(snapshot).lower()
+    text = render(snapshot)
 
-    assert "not a global optimum" in text
-    assert "not an official result" in text
-    assert "not an organizer-confirmed npv" in text
+    assert "не является глобальным" in text
+    assert "оптимумом, официальным результатом или подтверждённым организатором" in text
+    assert "ЛУЧШИЙ ИЗ ПОЛНОСТЬЮ ПРОСЧИТАННЫХ НА ДАННЫЙ МОМЕНТ СЦЕНАРИЕВ" in text
 
 
 # --- 9, 10, 11. закрытый отказ --------------------------------------------
@@ -347,29 +354,30 @@ def test_economic_breakdown_comes_from_evidence(snapshot) -> None:
     assert e["npv_m"] == pytest.approx(EXP003_BEST_DELTA, abs=1e-9)
 
 
-def test_pipeline_stage_list_is_shown(snapshot) -> None:
+def test_pipeline_stage_list_is_shown_in_russian(snapshot) -> None:
     text = render(snapshot)
 
     for stage in (
-        "CASE",
-        "HISTORY + CONSTRAINTS",
-        "CONTROL PLAN",
-        "wells_schedule.inc",
-        "OPM FLOW",
-        "TRAJECTORY",
-        "CHDD",
-        "CONSTRAINT AUDIT",
-        "VERIFIED NPV",
+        "КЕЙС",
+        "ИСТОРИЯ + ОГРАНИЧЕНИЯ",
+        "ПЛАН УПРАВЛЕНИЯ",
+        "ТРАЕКТОРИЯ СОСТОЯНИЯ",
+        "РАСЧЁТ ЧДД",
+        "ПРОВЕРКА ОГРАНИЧЕНИЙ",
+        "ПРОВЕРЕННЫЙ РЕЗУЛЬТАТ",
     ):
         assert stage in text
-    assert "Validation pipeline: PASS" in text
+    # Технические имена не переводятся.
+    assert "wells_schedule.inc" in text
+    assert "OPM FLOW" in text
+    assert "Контур проверки: ПРОЙДЕН" in text
 
 
 def test_demo_does_not_claim_live_recomputation(snapshot) -> None:
     text = render(snapshot)
 
-    assert "previously completed full OPM Flow + CHDD runs" in text
-    assert "not recomputed here" in text
+    assert "ранее выполненные полные расчёты OPM Flow + ЧДД" in text
+    assert "здесь они не пересчитываются" in text
 
 
 def test_cli_succeeds_on_the_canonical_repository(capsys: pytest.CaptureFixture[str]) -> None:
@@ -377,5 +385,5 @@ def test_cli_succeeds_on_the_canonical_repository(capsys: pytest.CaptureFixture[
     captured = capsys.readouterr()
 
     assert code == 0
-    assert "VERIFIED EXPERIMENT SNAPSHOT" in captured.out
+    assert "ПРОВЕРЕННЫЕ РЕЗУЛЬТАТЫ ВЫЧИСЛИТЕЛЬНЫХ ЭКСПЕРИМЕНТОВ" in captured.out
     assert captured.err == ""

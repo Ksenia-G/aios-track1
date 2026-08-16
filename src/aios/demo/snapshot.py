@@ -181,6 +181,10 @@ class StageEntry:
     delta_npv_mln_rub: float
     delta_npv_pct: float
     simulation_note: str
+    # Счётчики хранятся числами, а не готовой фразой: подпись собирается
+    # на стороне вывода, и её язык не должен требовать разбора текста.
+    candidate_runs: int
+    reconciliation_runs: int = 0
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -191,6 +195,8 @@ class StageEntry:
             "delta_npv_mln_rub": self.delta_npv_mln_rub,
             "delta_npv_pct": self.delta_npv_pct,
             "simulation_note": self.simulation_note,
+            "candidate_runs": self.candidate_runs,
+            "reconciliation_runs": self.reconciliation_runs,
         }
 
 
@@ -424,7 +430,13 @@ def build_snapshot(root: Path | None = None) -> DemoSnapshot:
         raise EvidenceError("exp003 simulation counts do not add up")
 
     def _entry(
-        stage: str, evidence: str, scenario_id: str | None, npv: float, note: str
+        stage: str,
+        evidence: str,
+        scenario_id: str | None,
+        npv: float,
+        note: str,
+        candidates: int,
+        reconciliation: int = 0,
     ) -> StageEntry:
         delta = npv - baseline_npv
         return StageEntry(
@@ -435,16 +447,19 @@ def build_snapshot(root: Path | None = None) -> DemoSnapshot:
             delta_npv_mln_rub=delta,
             delta_npv_pct=delta / baseline_npv * 100.0,
             simulation_note=note,
+            candidate_runs=candidates,
+            reconciliation_runs=reconciliation,
         )
 
     progression = (
-        _entry("Baseline", "validated control run", None, baseline_npv, "1 control run"),
+        _entry("Baseline", "validated control run", None, baseline_npv, "1 control run", 1),
         _entry(
             "EXP-001",
             "directional injection screen",
             _require_text(exp001, "best_scenario", "exp001/summary.json"),
             exp001_best_npv,
             f"{int(exp001_counts)} candidate scenarios",
+            int(exp001_counts),
         ),
         _entry(
             "EXP-002",
@@ -452,6 +467,7 @@ def build_snapshot(root: Path | None = None) -> DemoSnapshot:
             _require_text(exp002_best, "scenario_id", "exp002 best"),
             exp002_best_npv,
             f"{int(exp002_candidates)} candidate scenarios",
+            int(exp002_candidates),
         ),
         _entry(
             "EXP-003",
@@ -459,6 +475,8 @@ def build_snapshot(root: Path | None = None) -> DemoSnapshot:
             best_id,
             exp003_npv,
             f"{int(exp003_new)} candidate scenarios (+{int(exp003_recon)} reconciliation)",
+            int(exp003_new),
+            int(exp003_recon),
         ),
     )
 
