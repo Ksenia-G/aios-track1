@@ -69,9 +69,11 @@ def test_fraction_tags(fraction: float, tag: str) -> None:
     assert fraction_tag(fraction) == tag
 
 
-def test_non_percent_fraction_is_rejected() -> None:
-    with pytest.raises(ValueError, match="whole percent"):
-        fraction_tag(0.155)
+def test_fraction_finer_than_a_hundredth_of_a_percent_is_rejected() -> None:
+    # Сетка EXP-003 доходит до сотых долей процента; всё, что мельче,
+    # уже не восстанавливается из идентификатора сценария однозначно.
+    with pytest.raises(ValueError, match="hundredth of a percent"):
+        fraction_tag(0.155555)
 
 
 def test_refinement_enumeration_is_bounded() -> None:

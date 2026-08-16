@@ -30,6 +30,12 @@ mise run validation-demo
 mise run exp001
 ```
 
+Конверт робастности EXP-003 — [docs/exp003_robustness_envelope.md](docs/exp003_robustness_envelope.md):
+
+```bash
+mise run exp003
+```
+
 ## Работа с кодом
 
 Каждая задача выполняется в отдельной ветке и проходит через pull request. Ветка `main` напрямую не изменяется.

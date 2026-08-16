@@ -24,6 +24,11 @@ description = "EXP-001: экран перераспределения закач
 env = { PYTHONPATH = "src" }
 run = "uv run python -m aios.experiments"
 
+[tasks.exp003]
+description = "EXP-003: конверт робастности (полные прогоны OPM + ЧДД)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments.exp003_main"
+
 [tasks.check]
 run = """
 uv run ruff format --check .

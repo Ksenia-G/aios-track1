@@ -1,0 +1,34 @@
+{
+  "baseline": {
+    "npv": 1030.8776958837277
+  },
+  "exp001_best": {
+    "npv": 1051.6400268038235,
+    "delta": 20.762330920095792
+  },
+  "exp002_best": {
+    "npv": 1166.9843692054437,
+    "delta": 136.10667332171602
+  },
+  "exp003_max_npv": {
+    "scenario_id": "EXP003_D_COMP_ADD_42_100",
+    "schedule_sha256": "b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+    "npv": 1190.5933863822445,
+    "delta": 159.71569049851678,
+    "delta_pct": 15.493175488834229,
+    "injection_delta": 9705.34375
+  },
+  "near_baseline_injection": {
+    "scenario_id": "EXP003_D_COMP_ADD_42_100",
+    "schedule_sha256": "b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+    "npv": 1190.5933863822445,
+    "delta": 159.71569049851678,
+    "delta_pct": 15.493175488834229,
+    "injection_delta": 9705.34375
+  },
+  "simulation_count_total": 27,
+  "all_full_opm": true,
+  "all_chdd_verified": true,
+  "water_balance_status": "ORGANIZER_RULE_UNRESOLVED",
+  "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE"
+}

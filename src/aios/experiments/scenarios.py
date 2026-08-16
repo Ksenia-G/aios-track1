@@ -24,12 +24,27 @@ BASELINE_SCENARIO_ID = "EXP001_BASELINE"
 
 
 def fraction_tag(fraction: float) -> str:
-    """0.15 -> `F15`. Доля вне сетки процентов не допускается."""
+    """0.15 -> `F15`, 0.825 -> `F82p5`, 0.4675 -> `F46p75`.
+
+    Целые проценты печатаются как раньше, поэтому идентификаторы прошлых
+    экспериментов не меняются. Более мелкая сетка понадобилась EXP-003:
+    уточнение идёт с шагом в полпроцента, а масштабирование даёт доли,
+    которые в целые проценты не попадают вовсе.
+
+    Точность ограничена сотой долей процента. Это не придирка к формату:
+    идентификатор сценария обязан однозначно определять расписание, а доля,
+    напечатанная с потерей знаков, такого определения не даёт.
+    """
 
     percent = fraction * 100.0
-    if abs(percent - round(percent)) > 1e-9:
-        raise ValueError(f"fraction {fraction} is not a whole percent")
-    return f"F{round(percent):02d}"
+    hundredths = round(percent * 100.0)
+    if abs(percent * 100.0 - hundredths) > 1e-6:
+        raise ValueError(f"fraction {fraction} is finer than a hundredth of a percent")
+    whole, remainder = divmod(hundredths, 100)
+    if remainder == 0:
+        return f"F{whole:02d}"
+    text = f"{remainder:02d}".rstrip("0")
+    return f"F{whole:02d}p{text}"
 
 
 @dataclass(frozen=True, slots=True)

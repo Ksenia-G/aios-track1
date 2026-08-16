@@ -12,7 +12,19 @@ from typing import Any
 from aios.opm.summary import SummaryData
 
 FIELD_VECTORS: tuple[str, ...] = ("FOPR", "FWPR", "FWIR", "FPR", "FOPT", "FWPT", "FWIT", "FLPT")
-FIELD_SERIES_VECTORS: tuple[str, ...] = ("FOPR", "FWPR", "FWIR", "FPR")
+# Накопленные объёмы нужны рядами, а не только на конец прогона: помесячный
+# водный учёт EXP-003 считается их приращениями, и брать для этого суточные
+# дебиты было бы подгонкой -- отчётные шаги неравной длины.
+FIELD_SERIES_VECTORS: tuple[str, ...] = (
+    "FOPR",
+    "FWPR",
+    "FWIR",
+    "FPR",
+    "FOPT",
+    "FWPT",
+    "FWIT",
+    "FLPT",
+)
 WELL_SERIES_VECTORS: tuple[str, ...] = ("WOPR", "WWPR", "WLPR", "WWCT", "WBHP")
 WELL_CUMULATIVE_VECTORS: tuple[str, ...] = ("WOPT", "WWPT")
 
