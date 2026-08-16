@@ -29,6 +29,11 @@ description = "EXP-003: конверт робастности (полные пр
 env = { PYTHONPATH = "src" }
 run = "uv run python -m aios.experiments.exp003_main"
 
+[tasks.kt1-demo]
+description = "КТ1: проверенный снимок экспериментов (без Docker и без пересчёта)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.demo"
+
 [tasks.check]
 run = """
 uv run ruff format --check .

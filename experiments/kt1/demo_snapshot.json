@@ -1,0 +1,257 @@
+{
+  "baseline": {
+    "actual_injection_m3": 1962961.1875,
+    "npv_mln_rub": 1030.8776958837277
+  },
+  "best_candidate": {
+    "chdd_status": "PASS",
+    "constraints_status": "PASS",
+    "controls": [
+      {
+        "block": 2,
+        "donor": "41",
+        "fraction": 0.35000000000000003,
+        "mode": "TRANSFER",
+        "receiver": "19"
+      },
+      {
+        "block": 3,
+        "donor": "32",
+        "fraction": 0.8250000000000001,
+        "mode": "TRANSFER",
+        "receiver": "4"
+      },
+      {
+        "block": 4,
+        "donor": "7",
+        "fraction": 0.9750000000000001,
+        "mode": "TRANSFER",
+        "receiver": "42"
+      },
+      {
+        "block": 5,
+        "donor": "26",
+        "fraction": 0.9750000000000001,
+        "mode": "TRANSFER",
+        "receiver": "2"
+      }
+    ],
+    "delta_injection_m3": 9705.34375,
+    "delta_npv_mln_rub": 159.71569049851678,
+    "delta_npv_pct": 15.493175488834229,
+    "delta_oil_t": 28215.829073364235,
+    "delta_water_t": 51442.60639743623,
+    "final_pressure_delta_bar": -14.259201049804688,
+    "injection_deviation_pct": 0.49442361936664625,
+    "injection_m3": 1972666.53125,
+    "label": "MAX_NPV",
+    "mean_pressure_delta_bar": -10.196540832519531,
+    "npv_mln_rub": 1190.5933863822445,
+    "scenario_id": "EXP003_D_COMP_ADD_42_100",
+    "schedule_sha256": "b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+    "simulation_status": "PASS",
+    "supplements": [
+      {
+        "added_rate_m3_per_day": 100.0,
+        "well": "42"
+      }
+    ]
+  },
+  "conservative": {
+    "chdd_status": "PASS",
+    "constraints_status": "PASS",
+    "controls": [
+      {
+        "block": 2,
+        "donor": "41",
+        "fraction": 0.1925,
+        "mode": "TRANSFER",
+        "receiver": "19"
+      },
+      {
+        "block": 3,
+        "donor": "32",
+        "fraction": 0.45380000000000004,
+        "mode": "TRANSFER",
+        "receiver": "4"
+      },
+      {
+        "block": 4,
+        "donor": "7",
+        "fraction": 0.5363,
+        "mode": "TRANSFER",
+        "receiver": "42"
+      },
+      {
+        "block": 5,
+        "donor": "26",
+        "fraction": 0.5363,
+        "mode": "TRANSFER",
+        "receiver": "2"
+      }
+    ],
+    "delta_injection_m3": -444.3125,
+    "delta_npv_mln_rub": 90.22343906000083,
+    "delta_npv_pct": 8.752099247103809,
+    "delta_oil_t": 16237.934765380895,
+    "delta_water_t": 33133.718365119305,
+    "final_pressure_delta_bar": -12.658187866210938,
+    "injection_deviation_pct": 0.022634808208606007,
+    "injection_m3": 1962516.875,
+    "label": "CONSERVATIVE",
+    "mean_pressure_delta_bar": -6.601696650187175,
+    "npv_mln_rub": 1121.1011349437285,
+    "scenario_id": "EXP003_C_SCALE_F55",
+    "schedule_sha256": "5499d22f8a04d0c68f788783eab5e9280a3df7d607c4c519353c616addf93acb",
+    "simulation_status": "PASS",
+    "supplements": []
+  },
+  "economics_delta_vs_baseline": {
+    "deductions_m": 553.0302498379397,
+    "injection_opex_m": 0.2911603124999971,
+    "npv_m": 159.71569049851678,
+    "opex_m": 11.185637022514584,
+    "profit_tax_m": 56.456831798436326,
+    "pump_capex_m": 1.85,
+    "revenue_m": 790.0432140541989
+  },
+  "exp001_best": {
+    "delta_npv_mln_rub": 20.762330920095792,
+    "delta_npv_pct": 2.014044052267241,
+    "evidence": "directional injection screen",
+    "npv_mln_rub": 1051.6400268038235,
+    "scenario_id": "EXP001_B3_32_TO_4_F30",
+    "simulation_note": "70 candidate scenarios",
+    "stage": "EXP-001"
+  },
+  "exp002_best": {
+    "delta_npv_mln_rub": 136.10667332171602,
+    "delta_npv_pct": 13.202989439502572,
+    "evidence": "boundary search + combinations",
+    "npv_mln_rub": 1166.9843692054437,
+    "scenario_id": "EXP002_D_B2_41_TO_19_F40__B3_32_TO_4_F80__B4_7_TO_42_F90__B5_26_TO_2_F90",
+    "simulation_note": "62 candidate scenarios",
+    "stage": "EXP-002"
+  },
+  "exp003_best": {
+    "delta_npv_mln_rub": 159.71569049851678,
+    "delta_npv_pct": 15.493175488834229,
+    "evidence": "robustness envelope",
+    "npv_mln_rub": 1190.5933863822445,
+    "scenario_id": "EXP003_D_COMP_ADD_42_100",
+    "simulation_note": "25 candidate scenarios (+2 reconciliation)",
+    "stage": "EXP-003"
+  },
+  "low_pressure_deviation": {
+    "chdd_status": "PASS",
+    "constraints_status": "PASS",
+    "controls": [
+      {
+        "block": 4,
+        "donor": "7",
+        "fraction": 0.925,
+        "mode": "TRANSFER",
+        "receiver": "42"
+      }
+    ],
+    "delta_injection_m3": 6799.625,
+    "delta_npv_mln_rub": 47.01348562553699,
+    "delta_npv_pct": 4.560529907016207,
+    "delta_oil_t": 8180.365090942505,
+    "delta_water_t": 12315.293910057517,
+    "final_pressure_delta_bar": -4.4003143310546875,
+    "injection_deviation_pct": 0.34639630387495884,
+    "injection_m3": 1969760.8125,
+    "label": "LOW_PRESSURE_DEVIATION",
+    "mean_pressure_delta_bar": -1.8457228342692058,
+    "npv_mln_rub": 1077.8911815092647,
+    "scenario_id": "EXP003_A_B4_7_TO_42_F92p5",
+    "schedule_sha256": "0be894448b803a9d9e791ad9398d439b7a5fc5f0f60a5ed2d867dadb2df15068",
+    "simulation_status": "PASS",
+    "supplements": []
+  },
+  "pipeline": {
+    "baseline_schedule_sha256": "7662d10495796ace6b0d20df404ca68932b2894f367de2062c232cbe3e01c399",
+    "economics": "official CHDD_PYTHON",
+    "simulator": "OPM Flow (pinned image), full runs",
+    "stages": [
+      "CASE",
+      "HISTORY + CONSTRAINTS",
+      "CONTROL PLAN",
+      "wells_schedule.inc",
+      "OPM FLOW",
+      "TRAJECTORY",
+      "CHDD",
+      "CONSTRAINT AUDIT",
+      "VERIFIED NPV"
+    ],
+    "validation_status": "PASS"
+  },
+  "pressure_floor_status": "NO OFFICIAL FLOOR SUPPLIED",
+  "progression": [
+    {
+      "delta_npv_mln_rub": 0.0,
+      "delta_npv_pct": 0.0,
+      "evidence": "validated control run",
+      "npv_mln_rub": 1030.8776958837277,
+      "scenario_id": null,
+      "simulation_note": "1 control run",
+      "stage": "Baseline"
+    },
+    {
+      "delta_npv_mln_rub": 20.762330920095792,
+      "delta_npv_pct": 2.014044052267241,
+      "evidence": "directional injection screen",
+      "npv_mln_rub": 1051.6400268038235,
+      "scenario_id": "EXP001_B3_32_TO_4_F30",
+      "simulation_note": "70 candidate scenarios",
+      "stage": "EXP-001"
+    },
+    {
+      "delta_npv_mln_rub": 136.10667332171602,
+      "delta_npv_pct": 13.202989439502572,
+      "evidence": "boundary search + combinations",
+      "npv_mln_rub": 1166.9843692054437,
+      "scenario_id": "EXP002_D_B2_41_TO_19_F40__B3_32_TO_4_F80__B4_7_TO_42_F90__B5_26_TO_2_F90",
+      "simulation_note": "62 candidate scenarios",
+      "stage": "EXP-002"
+    },
+    {
+      "delta_npv_mln_rub": 159.71569049851678,
+      "delta_npv_pct": 15.493175488834229,
+      "evidence": "robustness envelope",
+      "npv_mln_rub": 1190.5933863822445,
+      "scenario_id": "EXP003_D_COMP_ADD_42_100",
+      "simulation_note": "25 candidate scenarios (+2 reconciliation)",
+      "stage": "EXP-003"
+    }
+  ],
+  "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+  "robustness": {
+    "baseline_actual_injection_m3": 1962961.1875,
+    "bhp_cap_bar": 300.0,
+    "candidate_actual_injection_m3": 1972666.53125,
+    "delta_actual_injection_m3": 9705.34375,
+    "final_field_pressure_delta_bar": -14.259201049804688,
+    "injection_deviation_pct": 0.49442361936664625,
+    "mean_field_pressure_delta_bar": -10.196540832519531,
+    "realization_ratio": 0.9914654864091559,
+    "realized_added_injection_m3": 69303.4375,
+    "saturation_status": "HEADROOM_REMAINS",
+    "scheduled_added_injection_m3": 69900.0,
+    "supplement_rate_m3_per_day": 100.0,
+    "supplement_well": "42",
+    "supplement_well_bhp_headroom_bar": 11.459197998046875,
+    "supplement_well_cap_bound_states": 0,
+    "supplement_well_max_wbhp_bar": 288.5408020019531
+  },
+  "source_artifacts": [
+    "experiments/exp001/summary.json",
+    "experiments/exp002/summary.json",
+    "experiments/exp003/summary.json",
+    "experiments/exp003/results.csv",
+    "experiments/exp003/compensation.csv",
+    "experiments/exp003/kt1_snapshot.json"
+  ],
+  "water_balance_status": "ORGANIZER_RULE_UNRESOLVED"
+}
