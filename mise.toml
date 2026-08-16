@@ -1,3 +1,9 @@
+# Локальная настройка внешних материалов. Файл .env не отслеживается;
+# пример -- в .env.example. Отсутствие файла не является ошибкой:
+# без него работают тесты и демонстрация, но не живой прогон.
+[env]
+_.file = { path = ".env", redact = false }
+
 [tools]
 python = "3.12"
 uv = "0.11"
@@ -14,6 +20,26 @@ run = "uv run ruff check ."
 [tasks.test]
 run = "uv run pytest"
 
+[tasks.validation-demo]
+description = "Сквозной прогон: кейс -> расписание -> OPM Flow -> ЧДД -> пакет сабмишена"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.pipeline"
+
+[tasks.exp001]
+description = "EXP-001: экран перераспределения закачки (полные прогоны OPM + ЧДД)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments"
+
+[tasks.exp003]
+description = "EXP-003: конверт робастности (полные прогоны OPM + ЧДД)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments.exp003_main"
+
+[tasks.kt1-demo]
+description = "КТ1: проверенный снимок экспериментов (без Docker и без пересчёта)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.demo"
+
 [tasks.check]
 run = """
 uv run ruff format --check .
@@ -21,3 +47,8 @@ uv run ruff check .
 uv run pytest
 git diff --check
 """
+
+[tasks.exp002]
+description = "EXP-002: boundary search and transfer combinations (full OPM + CHDD)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.experiments.exp002_cli"

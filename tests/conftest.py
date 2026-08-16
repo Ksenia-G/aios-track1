@@ -317,3 +317,162 @@ def make_harness(tmp_path: Path) -> Iterator[Callable[..., EngineHarness]]:
 @pytest.fixture
 def json_payload() -> dict[str, JsonValue]:
     return {"alpha": 1, "beta": [1, 2.5, None, True], "gamma": {"b": "значение", "a": -0.0}}
+
+
+# --- Синтетический кейс для контура сабмишена -------------------------------
+#
+# Тесты не ходят в лабораторную песочницу и не запускают симулятор: колода
+# здесь игрушечная, но по структуре -- та же, что у Model Y. Проверяется
+# логика разбора, политики, генерации и ворот, а не физика.
+
+MINI_DATA_DECK = """RUNSPEC
+
+TITLE
+MINI DECK
+
+START
+ 01 'JAN' 2020 /
+METRIC
+
+GRID
+
+INCLUDE
+'INCLUDE/PHYSICS.INC' /
+
+SCHEDULE
+
+INCLUDE
+'INCLUDE/SCH.INC' /
+
+END
+"""
+
+# Файл «физики» нужен только для того, чтобы у рабочей копии был хотя бы один
+# перенесённый из колоды файл: на нём проверяется, что перенос -- копия,
+# а не жёсткая ссылка на оригинал.
+MINI_PHYSICS = "-- synthetic physics placeholder\n"
+
+MINI_SCHEDULE = """-- synthetic schedule
+WELSPECS
+ 'P1' 'G' 1 1 1* 'OIL' /
+ 'P2' 'G' 2 2 1* 'OIL' /
+ 'I1' 'G' 3 3 1* 'WATER' /
+/
+COMPDAT
+ 'P1' 1* 1* 1 2 'OPEN' 1* 1* 0.22 1* 0 1* 'Z' 1* /
+/
+WCONPROD
+ 'P1' 'OPEN' 'LRAT' 1* 1* 1* 100 1* 50 1* 1* /
+ 'P2' 'OPEN' 'LRAT' 1* 1* 1* 100 1* 50 1* 1* /
+/
+WCONINJE
+ 'I1' 'WATER' 'OPEN' 'RATE' 200 1* 300 1* 1* /
+/
+DATES
+ 01 'FEB' 2020 /
+/
+WCONPROD
+ 'P1' 'OPEN' 'LRAT' 1* 1* 1* 120 1* 50 1* 1* /
+/
+WCONINJE
+ 'I1' 'WATER' 'OPEN' 'RATE' 250 1* 300 1* 1* /
+/
+DATES
+ 01 'MAR' 2020 /
+/
+DATES
+ 01 'APR' 2020 /
+/
+"""
+
+
+def mini_case_payload() -> dict:
+    """Кейс, ссылающийся на синтетическую колоду рядом с собой."""
+
+    return {
+        "case_id": "mini",
+        "track": 1,
+        "management_start_date": "2020-02-01",
+        "management_end_date": "2020-04-01",
+        "history": {
+            "deck_root": "deck",
+            "data_file": "MINI.DATA",
+            "schedule_include": "INCLUDE/SCH.INC",
+        },
+        "constraints": {
+            "producer_wlpr_max": 500.0,
+            "allowed_producer_controls": ["LRAT"],
+            "allowed_injector_controls": ["RATE"],
+            "allow_producer_to_injector": False,
+            "producer_bhp_min": 50.0,
+            "injector_bhp_max": 300.0,
+        },
+        "economics": {
+            "calculator_root": "chdd",
+            "norms_workbook": "chdd/norms.xlsx",
+            "economic_start_date": "2020-02-01",
+            "oil_density_t_per_sm3": 0.832,
+            "water_density_t_per_sm3": 1.0128,
+            "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+        },
+        "simulator": {"docker_image": "example/flow@sha256:" + "0" * 64},
+    }
+
+
+@pytest.fixture
+def case_payload() -> dict:
+    """Свежий словарь кейса, который тест может испортить как угодно."""
+
+    return mini_case_payload()
+
+
+@pytest.fixture
+def mini_case_dir(tmp_path: Path) -> Path:
+    """Каталог с синтетической колодой и файлом кейса."""
+
+    deck = tmp_path / "deck"
+    (deck / "INCLUDE").mkdir(parents=True)
+    (deck / "MINI.DATA").write_text(MINI_DATA_DECK, encoding="utf-8")
+    (deck / "INCLUDE" / "SCH.INC").write_text(MINI_SCHEDULE, encoding="utf-8")
+    (deck / "INCLUDE" / "PHYSICS.INC").write_text(MINI_PHYSICS, encoding="utf-8")
+    (tmp_path / "case.json").write_text(
+        json.dumps(mini_case_payload(), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return tmp_path
+
+
+@pytest.fixture
+def mini_case(mini_case_dir: Path):
+    from aios.cases import load_case
+
+    return load_case(mini_case_dir / "case.json")
+
+
+# --- опорный кейс Model Y --------------------------------------------------
+
+
+@pytest.fixture
+def model_y_case():
+    """Настоящий кейс.
+
+    Model Y -- внешний материал, в репозиторий он не кладётся. Тест
+    пропускается ровно в двух случаях: внешние пути не настроены
+    (`MODEL_Y_ROOT` / `CHDD_ROOT`) или колода по ним недоступна. Всё
+    остальное остаётся ошибкой: пропуск здесь -- заявленное поведение для
+    отсутствующего внешнего входа, а не способ спрятать поломку.
+    """
+
+    from aios.cases import CaseError, load_case
+
+    case_path = REPO_ROOT / "cases" / "model_y_validation.json"
+    if not case_path.is_file():
+        pytest.skip("Model Y case file is not present")
+    try:
+        case = load_case(case_path)
+    except CaseError as exc:
+        if "environment variable" not in str(exc):
+            raise
+        pytest.skip(f"external resources are not configured: {exc}")
+    if not case.history.schedule_path.is_file():
+        pytest.skip("Model Y deck is not available in this environment")
+    return case

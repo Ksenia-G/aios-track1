@@ -11,6 +11,8 @@ htmlcov/
 .venv/
 .env
 .env.*
+# Пример настройки внешних материалов отслеживается намеренно.
+!.env.example
 
 # Build output
 build/
@@ -26,3 +28,10 @@ data/processed/
 
 # Operating system
 .DS_Store
+
+# Validation pipeline run output
+output/
+runtime/
+
+# Experiment run output
+experiments/*/runtime/
