@@ -1,0 +1,30 @@
+{
+  "base_commit": "82264a9dcafb17f459dcf88176996c5f176d542b",
+  "baseline_npv_mln_rub": 1030.8776958837277,
+  "exp003_best_npv_mln_rub": 1190.5933863822445,
+  "scenario_count_total": 44,
+  "new_full_opm_simulations": 44,
+  "passed": 44,
+  "failed": 0,
+  "selections": {
+    "MAX_NPV": "EXP004_C_JOINT_P500_I600",
+    "NEAR_BASELINE_VRR": "EXP004_C_JOINT_P300_I220",
+    "LOW_PRESSURE_RISK": "EXP004_C_JOINT_P500_I600",
+    "MODERATE_VRR": "EXP004_C_JOINT_P500_I600",
+    "AGGRESSIVE_UPPER_BOUND": "EXP004_C_JOINT_P500_I600"
+  },
+  "thresholds": {
+    "above_1500": true,
+    "above_1800": true,
+    "above_2200": false,
+    "max_verified_npv_mln_rub": 1826.267931654948
+  },
+  "limiting_mechanisms": [
+    "producer liquid target reaches the 500 m3/day economic ceiling (WLPR>500 aborts CHDD)",
+    "31 of 33 producers sit on the 50 bar bottomhole floor at the ceiling",
+    "injector bottomhole pressure saturates at 300 bar: +40% commanded injection delivered +1.9%"
+  ],
+  "pareto_size": 9,
+  "provenance": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+  "water_balance_status": "ORGANIZER_RULE_UNRESOLVED"
+}

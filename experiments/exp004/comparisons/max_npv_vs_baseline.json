@@ -1,0 +1,49 @@
+{
+  "baseline_vrr": {
+    "count": 24,
+    "min": 0.9002250009384622,
+    "p05": 0.9010699091553115,
+    "p25": 0.9484030710912871,
+    "median": 0.9741503280313071,
+    "p75": 1.0100255781601204,
+    "p95": 1.0574496881816786,
+    "max": 1.0601336856721177,
+    "mean": 0.977346248219237,
+    "longest_run_above_1": 6,
+    "longest_run_below_1": 18,
+    "first_date": "2014-01-01",
+    "last_date": "2015-12-01",
+    "cumulative": {
+      "window_start": "2014-01-01",
+      "window_end": "2015-12-01",
+      "injected_surface_sm3": 1962961.0,
+      "injected_reservoir_rm3": 2006295.0649800925,
+      "produced_reservoir_rm3": 2058268.0,
+      "cumulative_vrr": 0.974749189600233
+    }
+  },
+  "max_npv_vrr": {
+    "count": 25,
+    "min": 0.9886186756056384,
+    "p05": 0.9941344821921834,
+    "p25": 1.000204067465505,
+    "median": 1.0032934468258257,
+    "p75": 1.010044266699239,
+    "p95": 1.0551769769069108,
+    "max": 1.0978331005618533,
+    "mean": 1.0119901242962213,
+    "longest_run_above_1": 14,
+    "longest_run_below_1": 6,
+    "first_date": "2014-01-01",
+    "last_date": "2015-12-01",
+    "cumulative": {
+      "window_start": "2014-01-01",
+      "window_end": "2015-12-01",
+      "injected_surface_sm3": 5365729.0,
+      "injected_reservoir_rm3": 5481625.394154302,
+      "produced_reservoir_rm3": 5434825.0,
+      "cumulative_vrr": 1.0086112053569898
+    }
+  },
+  "note": "instantaneous envelope plus cumulative ratio; the two are distinct quantities"
+}

@@ -1,0 +1,68 @@
+{
+  "pvt": {
+    "reference_pressure_bar": 141.0,
+    "formation_volume_factor": 1.023,
+    "compressibility_per_bar": 4.35e-05,
+    "viscosity_cp": 0.41
+  },
+  "formula": "VRR(t) = FWIR(t) * Bw(FPR(t)) / FVPR(t); Bw(P) = Bw_ref / (1 + X + X^2/2), X = Cw*(P - P_ref); units: FWIR [SM3/day], Bw [RM3/SM3], FVPR [RM3/day]",
+  "jan_2014_validation": {
+    "date": "2014-01-01",
+    "FOPR": 416.4972839355469,
+    "FWPR": 2452.6787109375,
+    "FLPR": 2869.176025390625,
+    "FWIR": 3027.59521484375,
+    "FVPR": 2959.436767578125,
+    "FPR": 162.57119750976562,
+    "Bw_inj": 1.0220405212983463,
+    "reservoir_injection_rate_rm3_per_day": 3094.324991659285,
+    "VRR": 1.0455790188048337
+  },
+  "historical_full_2007_2015": {
+    "count": 108,
+    "min": 0.0,
+    "p05": 0.0,
+    "p25": 0.9640404371763918,
+    "median": 1.0449050477861332,
+    "p75": 1.0870122893550949,
+    "p95": 1.1576528832097497,
+    "max": 1.246090651179855,
+    "mean": 0.9149383347285933,
+    "longest_run_above_1": 70,
+    "longest_run_below_1": 18,
+    "first_date": "2007-05-02",
+    "last_date": "2015-12-01"
+  },
+  "management_window_2014_2015": {
+    "count": 24,
+    "min": 0.9002250009384622,
+    "p05": 0.9010699091553115,
+    "p25": 0.9484030710912871,
+    "median": 0.9741503280313071,
+    "p75": 1.0100255781601204,
+    "p95": 1.0574496881816786,
+    "max": 1.0601336856721177,
+    "mean": 0.977346248219237,
+    "longest_run_above_1": 6,
+    "longest_run_below_1": 18,
+    "first_date": "2014-01-01",
+    "last_date": "2015-12-01"
+  },
+  "cumulative_full": {
+    "window_start": "2007-05-02",
+    "window_end": "2015-12-01",
+    "injected_surface_sm3": 7852155.0,
+    "injected_reservoir_rm3": 8034202.287871158,
+    "produced_reservoir_rm3": 8031187.499481201,
+    "cumulative_vrr": 1.0003753851332884
+  },
+  "cumulative_window": {
+    "window_start": "2014-01-01",
+    "window_end": "2015-12-01",
+    "injected_surface_sm3": 1962961.0,
+    "injected_reservoir_rm3": 2006295.0649800925,
+    "produced_reservoir_rm3": 2058268.0,
+    "cumulative_vrr": 0.974749189600233
+  },
+  "note": "Diagnostic only. Neither VRR<=1.0 nor VRR<=1.1 is a confirmed organizer rule; water/facility semantics remain ORGANIZER_RULE_UNRESOLVED."
+}
