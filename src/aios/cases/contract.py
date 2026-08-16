@@ -10,6 +10,8 @@
 """
 
 import json
+import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -208,10 +210,36 @@ def _as_upper_tuple(value: Any, where: str) -> tuple[str, ...]:
     return tuple(items)
 
 
+_ENV_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _expand_environment(value: str, where: str) -> str:
+    """Подставить переменные окружения в путь.
+
+    Model Y и официальный пакет ЧДД в репозиторий не кладутся, поэтому кейс
+    ссылается на них через переменные окружения. Незаданная переменная --
+    это ошибка кейса, а не пустая строка: молча собранный путь вида
+    `/input/Нормативы_ЧДД.xlsx` привёл бы к отказу где-то глубже, где уже
+    непонятно, что именно не настроено.
+    """
+
+    missing = [
+        name
+        for match in _ENV_REFERENCE.finditer(value)
+        if (name := match.group(1) or match.group(2)) not in os.environ
+    ]
+    if missing:
+        raise CaseError(
+            f"{where}: environment variable(s) not set: {', '.join(sorted(set(missing)))}. "
+            f"Point them at the external Model Y deck and CHDD package."
+        )
+    return os.path.expandvars(value)
+
+
 def _as_path(value: Any, where: str, base_dir: Path) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise CaseError(f"{where}: expected a non-empty path string")
-    path = Path(value).expanduser()
+    path = Path(_expand_environment(value, where)).expanduser()
     return path if path.is_absolute() else (base_dir / path).resolve()
 
 

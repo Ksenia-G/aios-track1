@@ -286,12 +286,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = args.output.expanduser().resolve()
     runtime_root = args.runtime.expanduser().resolve()
+    # Кейс читается ДО снятия прошлых артефактов. Порядок принципиален:
+    # если кейс не настроен, прогон не начинается, и результаты прошлого
+    # эксперимента обязаны остаться на месте. Снимать их раньше означало бы
+    # уничтожать свидетельства из-за незаданной переменной окружения.
+    case = load_case(args.case)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     runtime_root.mkdir(parents=True, exist_ok=True)
     for name in OUTPUT_FILES:
         (output_dir / name).unlink(missing_ok=True)
 
-    case = load_case(args.case)
     injectors = all_injectors()
     started = time.monotonic()
     simulations = 0

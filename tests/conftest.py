@@ -453,14 +453,26 @@ def mini_case(mini_case_dir: Path):
 
 @pytest.fixture
 def model_y_case():
-    """Настоящий кейс. Тест пропускается там, где лабораторной колоды нет."""
+    """Настоящий кейс.
 
-    from aios.cases import load_case
+    Model Y -- внешний материал, в репозиторий он не кладётся. Тест
+    пропускается ровно в двух случаях: внешние пути не настроены
+    (`MODEL_Y_ROOT` / `CHDD_ROOT`) или колода по ним недоступна. Всё
+    остальное остаётся ошибкой: пропуск здесь -- заявленное поведение для
+    отсутствующего внешнего входа, а не способ спрятать поломку.
+    """
+
+    from aios.cases import CaseError, load_case
 
     case_path = REPO_ROOT / "cases" / "model_y_validation.json"
     if not case_path.is_file():
         pytest.skip("Model Y case file is not present")
-    case = load_case(case_path)
+    try:
+        case = load_case(case_path)
+    except CaseError as exc:
+        if "environment variable" not in str(exc):
+            raise
+        pytest.skip(f"external resources are not configured: {exc}")
     if not case.history.schedule_path.is_file():
         pytest.skip("Model Y deck is not available in this environment")
     return case

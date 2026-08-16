@@ -11,6 +11,8 @@ htmlcov/
 .venv/
 .env
 .env.*
+# Пример настройки внешних материалов отслеживается намеренно.
+!.env.example
 
 # Build output
 build/

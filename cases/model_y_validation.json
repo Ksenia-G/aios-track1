@@ -4,7 +4,7 @@
   "management_start_date": "2014-01-01",
   "management_end_date": "2015-12-01",
   "history": {
-    "deck_root": "/Users/alex/Developer/aios-pret0-002-sandbox/compat_p002",
+    "deck_root": "${MODEL_Y_ROOT}",
     "data_file": "MODEL_Y.DATA",
     "schedule_include": "INCLUDE/DemoSpe_002_2_sch.inc"
   },
@@ -19,8 +19,8 @@
     "field_injection_rate_max": null
   },
   "economics": {
-    "calculator_root": "/Users/alex/Developer/aios-pret0-002-sandbox/official_003b/chdd_pkg/CHDD_PYTHON",
-    "norms_workbook": "/Users/alex/Developer/aios-pret0-002-sandbox/official_003b/chdd_pkg/CHDD_PYTHON/input/Нормативы_ЧДД.xlsx",
+    "calculator_root": "${CHDD_ROOT}",
+    "norms_workbook": "${CHDD_ROOT}/input/Нормативы_ЧДД.xlsx",
     "economic_start_date": "2014-01-01",
     "oil_density_t_per_sm3": 0.832,
     "water_density_t_per_sm3": 1.0128,

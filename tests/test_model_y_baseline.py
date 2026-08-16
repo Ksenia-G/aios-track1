@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from aios.cases import load_case
+from aios.cases import CaseError, load_case
 from aios.pipeline import build_schedule_for_case
 from aios.schedule import schedule_sha256, validate_schedule
 from aios.schedule.policy import DEFAULT_POLICY_ID
@@ -29,7 +29,14 @@ BASELINE_NPV_MLN_RUB = 1030.877696
 def _case_or_skip():
     if not CASE_PATH.is_file():
         pytest.skip("Model Y case file is not present")
-    case = load_case(CASE_PATH)
+    try:
+        case = load_case(CASE_PATH)
+    except CaseError as exc:
+        # Внешние материалы не настроены -- это заявленное состояние клона
+        # без Model Y, а не поломка.
+        if "environment variable" not in str(exc):
+            raise
+        pytest.skip(f"external resources are not configured: {exc}")
     if not case.history.schedule_path.is_file():
         pytest.skip("Model Y deck is not available in this environment")
     return case

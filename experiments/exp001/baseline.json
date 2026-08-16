@@ -21,7 +21,7 @@
       "run",
       "--rm",
       "-v",
-      "/Users/alex/Developer/worktrees/aios-exp-001/experiments/exp001/runtime/EXP001_BASELINE/workspace:/data",
+      "<workspace>:/data",
       "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
       "flow",
       "/data/MODEL_Y.DATA",
