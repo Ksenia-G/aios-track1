@@ -16,10 +16,18 @@ from aios.agents.pressure_agent import (
     PressureProposalReason,
     ProposalType,
 )
+from aios.agents.sweep_agent import (
+    SWEEP_AGENT_VERSION,
+    SweepAgent,
+    SweepAgentError,
+    SweepProposal,
+    SweepProposalReason,
+)
 
 __all__ = [
     "CONSTRAINT_GUARDIAN_VERSION",
     "PRESSURE_AGENT_VERSION",
+    "SWEEP_AGENT_VERSION",
     "ConstraintCheck",
     "ConstraintEvaluationError",
     "ConstraintGuardian",
@@ -30,4 +38,8 @@ __all__ = [
     "PressureProposal",
     "PressureProposalReason",
     "ProposalType",
+    "SweepAgent",
+    "SweepAgentError",
+    "SweepProposal",
+    "SweepProposalReason",
 ]
