@@ -44,12 +44,16 @@ class StateMetadata:
     run_id: str
     simulator_digest: str
     schedule_hash: str
+    source_summary_identity: str
+    extractor_version: str
 
     def __post_init__(self) -> None:
         required_text(self.case_id, "metadata.case_id")
         required_text(self.run_id, "metadata.run_id")
         required_text(self.simulator_digest, "metadata.simulator_digest")
         required_text(self.schedule_hash, "metadata.schedule_hash")
+        required_text(self.source_summary_identity, "metadata.source_summary_identity")
+        required_text(self.extractor_version, "metadata.extractor_version")
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
@@ -58,6 +62,8 @@ class StateMetadata:
             "run_id": self.run_id,
             "simulator_digest": self.simulator_digest,
             "schedule_hash": self.schedule_hash,
+            "source_summary_identity": self.source_summary_identity,
+            "extractor_version": self.extractor_version,
         }
 
     @classmethod
@@ -73,6 +79,13 @@ class StateMetadata:
             schedule_hash=required_text(
                 require_key(data, "schedule_hash", "metadata"), "metadata.schedule_hash"
             ),
+            source_summary_identity=required_text(
+                require_key(data, "source_summary_identity", "metadata"),
+                "metadata.source_summary_identity",
+            ),
+            extractor_version=required_text(
+                require_key(data, "extractor_version", "metadata"), "metadata.extractor_version"
+            ),
         )
 
 
@@ -86,6 +99,11 @@ class FieldStateSnapshot:
     water_rate: float | None
     liquid_rate: float | None
     water_injection_rate: float | None
+    voidage_production_rate: float | None
+    voidage_production_total: float | None
+    oil_total: float | None
+    water_total: float | None
+    water_injection_total: float | None
     produced_water_available: float | None
     compensation_value: float | None
     compensation_status: str
@@ -98,6 +116,11 @@ class FieldStateSnapshot:
             "water_rate",
             "liquid_rate",
             "water_injection_rate",
+            "voidage_production_rate",
+            "voidage_production_total",
+            "oil_total",
+            "water_total",
+            "water_injection_total",
             "produced_water_available",
             "compensation_value",
         ):
@@ -116,6 +139,15 @@ class FieldStateSnapshot:
                 "liquid_rate": self.liquid_rate,
             },
             "injection": {"water_injection_rate": self.water_injection_rate},
+            "voidage": {
+                "FVPR": self.voidage_production_rate,
+                "FVPT": self.voidage_production_total,
+            },
+            "cumulative": {
+                "WOPT": self.oil_total,
+                "WWPT": self.water_total,
+                "WWIT": self.water_injection_total,
+            },
             "water": {"produced_water_available": self.produced_water_available},
             "compensation": {
                 "value": self.compensation_value,
@@ -129,6 +161,8 @@ class FieldStateSnapshot:
         pressure = require_mapping(require_key(data, "pressure", "field"), "field.pressure")
         production = require_mapping(require_key(data, "production", "field"), "field.production")
         injection = require_mapping(require_key(data, "injection", "field"), "field.injection")
+        voidage = require_mapping(require_key(data, "voidage", "field"), "field.voidage")
+        cumulative = require_mapping(require_key(data, "cumulative", "field"), "field.cumulative")
         water = require_mapping(require_key(data, "water", "field"), "field.water")
         compensation = require_mapping(
             require_key(data, "compensation", "field"), "field.compensation"
@@ -157,6 +191,26 @@ class FieldStateSnapshot:
             water_injection_rate=optional_number(
                 require_key(injection, "water_injection_rate", "field.injection"),
                 "field.injection.water_injection_rate",
+            ),
+            voidage_production_rate=optional_number(
+                require_key(voidage, "FVPR", "field.voidage"),
+                "field.voidage.FVPR",
+            ),
+            voidage_production_total=optional_number(
+                require_key(voidage, "FVPT", "field.voidage"),
+                "field.voidage.FVPT",
+            ),
+            oil_total=optional_number(
+                require_key(cumulative, "WOPT", "field.cumulative"),
+                "field.cumulative.WOPT",
+            ),
+            water_total=optional_number(
+                require_key(cumulative, "WWPT", "field.cumulative"),
+                "field.cumulative.WWPT",
+            ),
+            water_injection_total=optional_number(
+                require_key(cumulative, "WWIT", "field.cumulative"),
+                "field.cumulative.WWIT",
             ),
             produced_water_available=optional_number(
                 require_key(water, "produced_water_available", "field.water"),
@@ -228,10 +282,14 @@ class WellStateSnapshot:
     wlpr: float | None
     wopr: float | None
     wwpr: float | None
+    wwir: float | None
     wct: float | None
     wopt: float | None
     wwpt: float | None
     wwit: float | None
+    producer_bhp_margin: float | None
+    injector_bhp_margin: float | None
+    wlpr_margin: float | None
 
     def __post_init__(self) -> None:
         required_text(self.well_id, "well.well_id")
@@ -244,10 +302,14 @@ class WellStateSnapshot:
             "wlpr",
             "wopr",
             "wwpr",
+            "wwir",
             "wct",
             "wopt",
             "wwpt",
             "wwit",
+            "producer_bhp_margin",
+            "injector_bhp_margin",
+            "wlpr_margin",
         ):
             optional_number(getattr(self, name), f"well.{name}")
 
@@ -265,10 +327,16 @@ class WellStateSnapshot:
                 "WLPR": self.wlpr,
                 "WOPR": self.wopr,
                 "WWPR": self.wwpr,
-                "WCT": self.wct,
+                "WWIR": self.wwir,
+                "WWCT": self.wct,
                 "WOPT": self.wopt,
                 "WWPT": self.wwpt,
                 "WWIT": self.wwit,
+            },
+            "derived": {
+                "producer_bhp_margin": self.producer_bhp_margin,
+                "injector_bhp_margin": self.injector_bhp_margin,
+                "wlpr_margin": self.wlpr_margin,
             },
         }
 
@@ -277,6 +345,7 @@ class WellStateSnapshot:
         data = require_mapping(payload, where)
         controls = require_mapping(require_key(data, "controls", where), f"{where}.controls")
         realized = require_mapping(require_key(data, "realized", where), f"{where}.realized")
+        derived = require_mapping(require_key(data, "derived", where), f"{where}.derived")
         for key in REALIZED_VECTOR_FIELDS:
             require_key(realized, key, f"{where}.realized")
         try:
@@ -299,10 +368,23 @@ class WellStateSnapshot:
             wlpr=optional_number(realized["WLPR"], f"{where}.realized.WLPR"),
             wopr=optional_number(realized["WOPR"], f"{where}.realized.WOPR"),
             wwpr=optional_number(realized["WWPR"], f"{where}.realized.WWPR"),
-            wct=optional_number(realized["WCT"], f"{where}.realized.WCT"),
+            wwir=optional_number(realized["WWIR"], f"{where}.realized.WWIR"),
+            wct=optional_number(realized["WWCT"], f"{where}.realized.WWCT"),
             wopt=optional_number(realized["WOPT"], f"{where}.realized.WOPT"),
             wwpt=optional_number(realized["WWPT"], f"{where}.realized.WWPT"),
             wwit=optional_number(realized["WWIT"], f"{where}.realized.WWIT"),
+            producer_bhp_margin=optional_number(
+                require_key(derived, "producer_bhp_margin", f"{where}.derived"),
+                f"{where}.derived.producer_bhp_margin",
+            ),
+            injector_bhp_margin=optional_number(
+                require_key(derived, "injector_bhp_margin", f"{where}.derived"),
+                f"{where}.derived.injector_bhp_margin",
+            ),
+            wlpr_margin=optional_number(
+                require_key(derived, "wlpr_margin", f"{where}.derived"),
+                f"{where}.derived.wlpr_margin",
+            ),
         )
 
 

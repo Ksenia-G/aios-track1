@@ -22,6 +22,7 @@
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -45,6 +46,15 @@ from aios.schedule.generator import (
 from aios.schedule.policy import DEFAULT_POLICY_ID, Policy, get_policy
 from aios.schedule.state import FieldState, reconstruct_state
 from aios.schedule.validator import ScheduleValidationReport, validate_schedule
+from aios.state import (
+    STATE_CARD_ARTIFACT_ROOT,
+    StateCard,
+    StateCardError,
+    StateExtractor,
+    publish_state_card,
+    state_run_id,
+    well_controls_from_schedule,
+)
 
 PIPELINE_ID = "aios.pipeline.validation"
 PIPELINE_VERSION = "1.0.0"
@@ -68,6 +78,7 @@ FINAL_ARTIFACTS = (
     CONSTRAINT_REPORT_FILENAME,
     VALIDATION_REPORT_FILENAME,
     RUN_PROVENANCE_FILENAME,
+    STATE_CARD_ARTIFACT_ROOT,
 )
 
 VERDICT_READY = "READY"
@@ -107,6 +118,7 @@ class PipelineReport:
     schedule_report: ScheduleValidationReport | None = None
     opm_result: OpmRunResult | None = None
     chdd_result: ChddResult | None = None
+    state_card: StateCard | None = None
     trajectory_stats: dict[str, Any] | None = None
     known_wells: int = 0
     reconstructed_wells: int = 0
@@ -176,6 +188,13 @@ class PipelineReport:
             "state": {
                 "known_wells": self.known_wells,
                 "reconstructed_wells": self.reconstructed_wells,
+                "card": None
+                if self.state_card is None
+                else {
+                    "date": self.state_card.metadata.date.isoformat(),
+                    "digest": self.state_card.digest(),
+                    "run_id": self.state_card.metadata.run_id,
+                },
             },
             "simulation": None if self.opm_result is None else self.opm_result.to_json(),
             "trajectory": self.trajectory_stats,
@@ -282,6 +301,13 @@ def _run_manifest(
         "chdd_input": None if report.chdd_input_path is None else str(report.chdd_input_path),
         "schedule_sha256": report.schedule_sha256,
         "simulation": None if report.opm_result is None else report.opm_result.to_json(),
+        "state_card": None
+        if report.state_card is None
+        else {
+            "date": report.state_card.metadata.date.isoformat(),
+            "digest": report.state_card.digest(),
+            "run_id": report.state_card.metadata.run_id,
+        },
         "calculator_version": None
         if report.chdd_result is None
         else report.chdd_result.calculator_version,
@@ -347,6 +373,9 @@ def invalidate_package(output_dir: Path) -> tuple[str, ...]:
         path = output_dir / name
         if path.is_file():
             path.unlink()
+            removed.append(name)
+        elif path.is_dir():
+            shutil.rmtree(path)
             removed.append(name)
     return tuple(removed)
 
@@ -421,6 +450,33 @@ def _execute(
     if not opm_result.is_pass or summary is None:
         report.blockers.extend(opm_result.errors[:10] or ["simulation produced no summary"])
         return
+
+    try:
+        schedule_hash = report.schedule_sha256
+        if schedule_hash is None:
+            raise StateCardError("schedule hash is unavailable")
+        simulator_digest = case.simulator.docker_image
+        state_card = StateExtractor().extract(
+            summary=summary,
+            case=case,
+            run_id=state_run_id(
+                case_id=case.case_id,
+                schedule_hash=schedule_hash,
+                simulator_digest=simulator_digest,
+            ),
+            simulator_digest=simulator_digest,
+            schedule_hash=schedule_hash,
+            well_controls=well_controls_from_schedule(
+                state,
+                schedule,
+                at_date=summary.dates[-1].date(),
+            ),
+        )
+    except StateCardError as exc:
+        report.blockers.append(f"state: {exc}")
+        return
+
+    report.state_card = state_card
 
     chdd_input: ChddInput | None = None
     try:
@@ -518,6 +574,8 @@ def _publish(
     written: list[Path] = []
 
     if report.verdict == VERDICT_READY and report.case is not None and report.chdd_result:
+        if report.state_card is None or report.opm_result is None:
+            raise PipelinePublishError("state card is missing from successful run")
         staged_schedule = staging_dir / SCHEDULE_FILENAME
         if not staged_schedule.is_file():
             raise PipelinePublishError(f"staged schedule is missing: {staged_schedule}")
@@ -530,6 +588,13 @@ def _publish(
         written.append(
             _write_json(
                 output_dir / YEARLY_NPV_PROFILE_FILENAME, yearly_npv_profile_payload(report)
+            )
+        )
+        written.append(
+            publish_state_card(
+                report.state_card,
+                output_dir=output_dir,
+                source_artifacts=report.opm_result.output_files,
             )
         )
         written.append(_write_json(output_dir / VALIDATION_REPORT_FILENAME, report.to_json()))

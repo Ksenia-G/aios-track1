@@ -9,9 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import date
 
 from aios.cases import Case
+from aios.evaluation.canonical import digest
 from aios.opm.summary import SummaryData
+from aios.schedule.events import InjectorControl, ProducerControl, Schedule
+from aios.schedule.events import WellRole as ScheduleWellRole
+from aios.schedule.state import FieldState, WellState
 from aios.state.schemas import StateCardError
 from aios.state.state_card import (
     ConstraintState,
@@ -31,6 +36,8 @@ FIELD_VECTORS = {
     "water_rate": "FWPR",
     "liquid_rate": "FLPR",
     "water_injection_rate": "FWIR",
+    "voidage_production_rate": "FVPR",
+    "voidage_production_total": "FVPT",
 }
 
 WELL_VECTORS = {
@@ -38,11 +45,87 @@ WELL_VECTORS = {
     "wlpr": "WLPR",
     "wopr": "WOPR",
     "wwpr": "WWPR",
+    "wwir": "WWIR",
     "wct": "WWCT",
     "wopt": "WOPT",
     "wwpt": "WWPT",
     "wwit": "WWIT",
 }
+
+STATE_EXTRACTOR_VERSION = "aios.state.extractor/1.0.0"
+
+
+def source_summary_identity(summary: SummaryData) -> str:
+    """Deterministic identity for the parsed simulator summary consumed here."""
+
+    payload = {
+        "start": summary.start.isoformat(),
+        "dates": [item.isoformat() for item in summary.dates],
+        "wells": list(summary.wells),
+        "units": dict(sorted(summary.units.items())),
+        "field_index": dict(sorted(summary._field_index.items())),
+        "well_index": {
+            f"{vector}:{well}": column
+            for (vector, well), column in sorted(summary._well_index.items())
+        },
+        "params": [list(row) for row in summary._params],
+    }
+    return f"summary-sha256:{digest(payload)}"
+
+
+def state_run_id(*, case_id: str, schedule_hash: str, simulator_digest: str) -> str:
+    """Deterministic run identifier for StateCard publication."""
+
+    payload = {
+        "case_id": case_id,
+        "schedule_hash": schedule_hash,
+        "simulator_digest": simulator_digest,
+    }
+    return f"state-{digest(payload)[:16]}"
+
+
+def _control_from_state(state: WellState) -> WellControlSnapshot:
+    role = WellRole.PRODUCER if state.role is ScheduleWellRole.PRODUCER else WellRole.INJECTOR
+    return WellControlSnapshot(
+        role=role,
+        status=str(state.status),
+        current_target=state.target,
+        control_mode=state.mode,
+    )
+
+
+def _control_from_producer(control: ProducerControl) -> WellControlSnapshot:
+    return WellControlSnapshot(
+        role=WellRole.PRODUCER,
+        status=str(control.status),
+        current_target=control.liquid_rate,
+        control_mode=control.mode,
+    )
+
+
+def _control_from_injector(control: InjectorControl) -> WellControlSnapshot:
+    return WellControlSnapshot(
+        role=WellRole.INJECTOR,
+        status=str(control.status),
+        current_target=control.surface_rate,
+        control_mode=control.mode,
+    )
+
+
+def well_controls_from_schedule(
+    initial_state: FieldState, schedule: Schedule, *, at_date: date
+) -> dict[str, WellControlSnapshot]:
+    """Replay production schedule controls to the requested state date."""
+
+    controls = {state.well: _control_from_state(state) for state in initial_state.wells}
+    for step in schedule.canonical().steps:
+        if step.date > at_date:
+            break
+        for producer in step.producers:
+            controls[producer.well] = _control_from_producer(producer)
+        for injector in step.injectors:
+            controls[injector.well] = _control_from_injector(injector)
+    return controls
 
 
 class StateExtractionError(StateCardError):
@@ -81,9 +164,12 @@ class StateExtractor:
             raise StateExtractionError(f"summary step {step} is outside available report range")
 
         uncertainty: list[str] = []
-        field = self._field_state(summary, resolved_step, case=case, uncertainty=uncertainty)
+        field = self._field_state(summary, resolved_step, case=case)
         wells = self._well_states(
-            summary, resolved_step, well_controls=well_controls, uncertainty=uncertainty
+            summary,
+            resolved_step,
+            case=case,
+            well_controls=well_controls,
         )
         constraints = self._constraints(case=case, wells=wells)
         if (
@@ -99,6 +185,8 @@ class StateExtractor:
                 run_id=run_id,
                 simulator_digest=simulator_digest,
                 schedule_hash=schedule_hash,
+                source_summary_identity=source_summary_identity(summary),
+                extractor_version=STATE_EXTRACTOR_VERSION,
             ),
             field=field,
             wells=wells,
@@ -107,19 +195,23 @@ class StateExtractor:
             uncertainty=UncertaintyState(items=tuple(dict.fromkeys(uncertainty))),
         )
 
-    def _field_value(
-        self, summary: SummaryData, logical_name: str, step: int, uncertainty: list[str]
-    ) -> float | None:
+    def _field_value(self, summary: SummaryData, logical_name: str, step: int) -> float:
         vector = self.field_vectors[logical_name]
         if not summary.has_field_vector(vector):
-            uncertainty.append(f"field vector {vector} unavailable")
-            return None
+            raise StateExtractionError(f"field vector {vector} unavailable")
         return summary.field_value(vector, step)
 
-    def _field_state(
-        self, summary: SummaryData, step: int, *, case: Case, uncertainty: list[str]
-    ) -> FieldStateSnapshot:
-        average_pressure = self._field_value(summary, "average_pressure", step, uncertainty)
+    def _well_total(self, summary: SummaryData, logical_name: str, step: int) -> float:
+        vector = self.well_vectors[logical_name]
+        values: list[float] = []
+        for well in summary.wells:
+            if not summary.has_well_vector(vector, well):
+                raise StateExtractionError(f"well {well} vector {vector} unavailable")
+            values.append(summary.well_value(vector, well, step))
+        return sum(values)
+
+    def _field_state(self, summary: SummaryData, step: int, *, case: Case) -> FieldStateSnapshot:
+        average_pressure = self._field_value(summary, "average_pressure", step)
         previous_pressure = None
         if step > 0 and summary.has_field_vector(self.field_vectors["average_pressure"]):
             previous_pressure = summary.field_value(
@@ -130,28 +222,28 @@ class StateExtractor:
             if average_pressure is None or previous_pressure is None
             else average_pressure - previous_pressure
         )
-        water_rate = self._field_value(summary, "water_rate", step, uncertainty)
+        water_rate = self._field_value(summary, "water_rate", step)
         return FieldStateSnapshot(
             average_pressure=average_pressure,
             pressure_trend=pressure_trend,
-            oil_rate=self._field_value(summary, "oil_rate", step, uncertainty),
+            oil_rate=self._field_value(summary, "oil_rate", step),
             water_rate=water_rate,
-            liquid_rate=self._field_value(summary, "liquid_rate", step, uncertainty),
-            water_injection_rate=self._field_value(
-                summary, "water_injection_rate", step, uncertainty
-            ),
+            liquid_rate=self._field_value(summary, "liquid_rate", step),
+            water_injection_rate=self._field_value(summary, "water_injection_rate", step),
+            voidage_production_rate=self._field_value(summary, "voidage_production_rate", step),
+            voidage_production_total=self._field_value(summary, "voidage_production_total", step),
+            oil_total=self._well_total(summary, "wopt", step),
+            water_total=self._well_total(summary, "wwpt", step),
+            water_injection_total=self._well_total(summary, "wwit", step),
             produced_water_available=water_rate,
             compensation_value=None,
             compensation_status=case.constraints.compensation.status,
         )
 
-    def _well_value(
-        self, summary: SummaryData, well: str, logical_name: str, step: int, uncertainty: list[str]
-    ) -> float | None:
+    def _well_value(self, summary: SummaryData, well: str, logical_name: str, step: int) -> float:
         vector = self.well_vectors[logical_name]
         if not summary.has_well_vector(vector, well):
-            uncertainty.append(f"well {well} vector {vector} unavailable")
-            return None
+            raise StateExtractionError(f"well {well} vector {vector} unavailable")
         return summary.well_value(vector, well, step)
 
     def _well_states(
@@ -159,29 +251,52 @@ class StateExtractor:
         summary: SummaryData,
         step: int,
         *,
+        case: Case,
         well_controls: Mapping[str, WellControlSnapshot],
-        uncertainty: list[str],
     ) -> tuple[WellStateSnapshot, ...]:
         states: list[WellStateSnapshot] = []
+        producer_bhp_min = case.constraints.official_realized.producer_bhp_min
+        injector_bhp_max = case.constraints.official_realized.injector_bhp_max
+        wlpr_max = case.constraints.official_realized.producer_wlpr_max
         for well in summary.wells:
             control = well_controls.get(well)
             if control is None:
                 raise StateExtractionError(f"missing control context for well {well!r}")
+            role = WellRole(control.role)
+            bhp = self._well_value(summary, well, "bhp", step)
+            wlpr = self._well_value(summary, well, "wlpr", step)
+            producer_bhp_margin = (
+                bhp - producer_bhp_min
+                if role is WellRole.PRODUCER and producer_bhp_min is not None
+                else None
+            )
+            injector_bhp_margin = (
+                injector_bhp_max - bhp
+                if role is WellRole.INJECTOR and injector_bhp_max is not None
+                else None
+            )
+            wlpr_margin = (
+                wlpr_max - wlpr if role is WellRole.PRODUCER and wlpr_max is not None else None
+            )
             states.append(
                 WellStateSnapshot(
                     well_id=well,
-                    role=WellRole(control.role),
+                    role=role,
                     status=control.status,
                     current_target=control.current_target,
                     control_mode=control.control_mode,
-                    bhp=self._well_value(summary, well, "bhp", step, uncertainty),
-                    wlpr=self._well_value(summary, well, "wlpr", step, uncertainty),
-                    wopr=self._well_value(summary, well, "wopr", step, uncertainty),
-                    wwpr=self._well_value(summary, well, "wwpr", step, uncertainty),
-                    wct=self._well_value(summary, well, "wct", step, uncertainty),
-                    wopt=self._well_value(summary, well, "wopt", step, uncertainty),
-                    wwpt=self._well_value(summary, well, "wwpt", step, uncertainty),
-                    wwit=self._well_value(summary, well, "wwit", step, uncertainty),
+                    bhp=bhp,
+                    wlpr=wlpr,
+                    wopr=self._well_value(summary, well, "wopr", step),
+                    wwpr=self._well_value(summary, well, "wwpr", step),
+                    wwir=self._well_value(summary, well, "wwir", step),
+                    wct=self._well_value(summary, well, "wct", step),
+                    wopt=self._well_value(summary, well, "wopt", step),
+                    wwpt=self._well_value(summary, well, "wwpt", step),
+                    wwit=self._well_value(summary, well, "wwit", step),
+                    producer_bhp_margin=producer_bhp_margin,
+                    injector_bhp_margin=injector_bhp_margin,
+                    wlpr_margin=wlpr_margin,
                 )
             )
         return tuple(states)

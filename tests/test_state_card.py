@@ -30,6 +30,8 @@ def _metadata() -> StateMetadata:
         run_id="run-001",
         simulator_digest="sim-sha256:abc",
         schedule_hash="a" * 64,
+        source_summary_identity="summary-sha256:def",
+        extractor_version="aios.state.extractor/1.0.0",
     )
 
 
@@ -41,6 +43,11 @@ def _field() -> FieldStateSnapshot:
         water_rate=35.0,
         liquid_rate=155.0,
         water_injection_rate=150.0,
+        voidage_production_rate=160.0,
+        voidage_production_total=1400.0,
+        oil_total=1000.0,
+        water_total=400.0,
+        water_injection_total=0.0,
         produced_water_available=35.0,
         compensation_value=None,
         compensation_status="UNRESOLVED",
@@ -58,10 +65,14 @@ def _well() -> WellStateSnapshot:
         wlpr=155.0,
         wopr=120.0,
         wwpr=35.0,
+        wwir=0.0,
         wct=0.2258,
         wopt=1000.0,
         wwpt=400.0,
         wwit=0.0,
+        producer_bhp_margin=5.0,
+        injector_bhp_margin=None,
+        wlpr_margin=345.0,
     )
 
 
@@ -96,9 +107,19 @@ def test_state_card_serializes_to_stable_json_shape() -> None:
     assert payload["schema_version"] == "1.0"
     assert payload["metadata"]["date"] == "2020-04-01"
     assert payload["metadata"]["simulator_digest"] == "sim-sha256:abc"
+    assert payload["metadata"]["source_summary_identity"] == "summary-sha256:def"
+    assert payload["metadata"]["extractor_version"] == "aios.state.extractor/1.0.0"
     assert payload["field"]["compensation"]["status"] == "UNRESOLVED"
+    assert payload["field"]["voidage"]["FVPR"] == 160.0
+    assert payload["field"]["voidage"]["FVPT"] == 1400.0
+    assert payload["field"]["cumulative"]["WOPT"] == 1000.0
+    assert payload["field"]["cumulative"]["WWPT"] == 400.0
+    assert payload["field"]["cumulative"]["WWIT"] == 0.0
     assert payload["wells"][0]["role"] == "producer"
     assert payload["wells"][0]["realized"]["BHP"] == 55.0
+    assert payload["wells"][0]["realized"]["WWIR"] == 0.0
+    assert payload["wells"][0]["derived"]["producer_bhp_margin"] == 5.0
+    assert payload["wells"][0]["derived"]["wlpr_margin"] == 345.0
     assert payload["constraints"]["official"]["producer_bhp_min"] == 50.0
     assert payload["constraints"]["search"]["producer_lrat_max"] == 500.0
     assert payload["geology"]["block_membership"] == {"P1": "B1"}
@@ -121,6 +142,8 @@ def test_state_card_digest_is_deterministic_and_tracks_provenance() -> None:
             run_id="run-001",
             simulator_digest="sim-sha256:other",
             schedule_hash="a" * 64,
+            source_summary_identity="summary-sha256:def",
+            extractor_version="aios.state.extractor/1.0.0",
         ),
         field=_field(),
         wells=(_well(),),
@@ -168,16 +191,19 @@ def _summary() -> SummaryData:
         "FWPR": 2,
         "FLPR": 3,
         "FWIR": 4,
+        "FVPR": 5,
+        "FVPT": 6,
     }
     wells = {
-        ("WBHP", "P1"): 5,
-        ("WLPR", "P1"): 6,
-        ("WOPR", "P1"): 7,
-        ("WWPR", "P1"): 8,
-        ("WWCT", "P1"): 9,
-        ("WOPT", "P1"): 10,
-        ("WWPT", "P1"): 11,
-        ("WWIT", "P1"): 12,
+        ("WBHP", "P1"): 7,
+        ("WLPR", "P1"): 8,
+        ("WOPR", "P1"): 9,
+        ("WWPR", "P1"): 10,
+        ("WWIR", "P1"): 11,
+        ("WWCT", "P1"): 12,
+        ("WOPT", "P1"): 13,
+        ("WWPT", "P1"): 14,
+        ("WWIT", "P1"): 15,
     }
     return SummaryData(
         start=_model_time(2020, 1, 1),
@@ -187,17 +213,37 @@ def _summary() -> SummaryData:
         _field_index=fields,
         _well_index=wells,
         _params=(
-            (200.0, 90.0, 20.0, 110.0, 100.0, 60.0, 110.0, 90.0, 20.0, 0.18, 900.0, 300.0, 0.0),
+            (
+                200.0,
+                90.0,
+                20.0,
+                110.0,
+                100.0,
+                120.0,
+                900.0,
+                60.0,
+                110.0,
+                90.0,
+                20.0,
+                0.0,
+                0.18,
+                900.0,
+                300.0,
+                0.0,
+            ),
             (
                 211.5,
                 120.0,
                 35.0,
                 155.0,
                 150.0,
+                160.0,
+                1400.0,
                 55.0,
                 155.0,
                 120.0,
                 35.0,
+                0.0,
                 0.2258,
                 1000.0,
                 400.0,

@@ -1,6 +1,20 @@
-"""MAS StateCard contract and extraction foundation."""
+"""MAS StateCard contract, extraction, and publication foundation."""
 
-from aios.state.extractor import StateExtractionError, StateExtractor
+from aios.state.extractor import (
+    STATE_EXTRACTOR_VERSION,
+    StateExtractionError,
+    StateExtractor,
+    source_summary_identity,
+    state_run_id,
+    well_controls_from_schedule,
+)
+from aios.state.publication import (
+    STATE_CARD_ARTIFACT_DIR,
+    STATE_CARD_ARTIFACT_ROOT,
+    publish_state_card,
+    state_card_artifact_payload,
+    state_card_filename,
+)
 from aios.state.schemas import REALIZED_VECTOR_FIELDS, STATE_CARD_SCHEMA_VERSION, StateCardError
 from aios.state.state_card import (
     ConstraintState,
@@ -16,7 +30,10 @@ from aios.state.state_card import (
 
 __all__ = [
     "REALIZED_VECTOR_FIELDS",
+    "STATE_CARD_ARTIFACT_DIR",
+    "STATE_CARD_ARTIFACT_ROOT",
     "STATE_CARD_SCHEMA_VERSION",
+    "STATE_EXTRACTOR_VERSION",
     "ConstraintState",
     "FieldStateSnapshot",
     "GeologyContext",
@@ -29,4 +46,10 @@ __all__ = [
     "WellControlSnapshot",
     "WellRole",
     "WellStateSnapshot",
+    "publish_state_card",
+    "source_summary_identity",
+    "state_card_artifact_payload",
+    "state_card_filename",
+    "state_run_id",
+    "well_controls_from_schedule",
 ]
