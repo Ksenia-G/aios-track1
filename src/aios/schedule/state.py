@@ -148,7 +148,11 @@ def reconstruct_state(deck: DeckSchedule, at_date: date) -> FieldState:
                 value = record.number(2)
                 current = states.get(name or "")
                 if current is None or name is None:
-                    continue
+                    raise DeckParseError(
+                        f"line {record.line + 1}: WELTARG for {name!r} has no prior well state"
+                    )
+                producer_targets = {"LRAT"}
+                injector_targets = {"RATE"}
                 if key == "BHP":
                     states[name] = WellState(
                         well=current.well,
@@ -159,6 +163,27 @@ def reconstruct_state(deck: DeckSchedule, at_date: date) -> FieldState:
                         bhp_limit=value,
                         phase=current.phase,
                         since=block_date,
+                    )
+                elif (
+                    current.role is WellRole.PRODUCER
+                    and key in producer_targets
+                    or current.role is WellRole.INJECTOR
+                    and key in injector_targets
+                ):
+                    states[name] = WellState(
+                        well=current.well,
+                        role=current.role,
+                        status=current.status,
+                        mode=key,
+                        target=value,
+                        bhp_limit=current.bhp_limit,
+                        phase=current.phase,
+                        since=block_date,
+                    )
+                else:
+                    raise DeckParseError(
+                        f"line {record.line + 1}: unsupported WELTARG target {key!r} "
+                        f"for {current.role} well {name!r}"
                     )
 
     ordered = tuple(states[name] for name in sorted(states, key=natural_key))

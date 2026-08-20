@@ -45,6 +45,8 @@ def valid_result() -> dict[str, Any]:
                 "activeWellMonths": 588.0,
                 "stopCount": 0,
                 "startCount": 0,
+                "chddM": 600.0,
+                "cumulativeChddM": 600.0,
             },
             {
                 "year": 2015,
@@ -52,6 +54,8 @@ def valid_result() -> dict[str, Any]:
                 "activeWellMonths": 539.0,
                 "stopCount": 0,
                 "startCount": 0,
+                "chddM": 430.8776958837277,
+                "cumulativeChddM": 1030.8776958837277,
             },
         ],
         "fieldMonthly": [{"month": "2014-01"}, {"month": "2015-11"}],

@@ -18,7 +18,7 @@ import importlib
 import sys
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import isfinite
 from pathlib import Path
 from typing import Any
@@ -115,6 +115,47 @@ def _calculator_on_path(root: Path):
             sys.path.remove(marker)
 
 
+ANNUAL_NPV_KEYS = ("chddM", "yearlyChddM", "yearlyNpvM", "npvM")
+ANNUAL_CUMULATIVE_KEYS = ("cumulativeChddM", "cumulativeNpvM", "cumulativeM")
+ANNUAL_CORE_KEYS = frozenset(
+    {
+        "year",
+        "months",
+        "activeWellMonths",
+        "stopCount",
+        "startCount",
+        *ANNUAL_NPV_KEYS,
+        *ANNUAL_CUMULATIVE_KEYS,
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class AnnualChddRow:
+    """One annual row emitted by the official calculator."""
+
+    year: int
+    npv_mln_rub: float
+    cumulative_mln_rub: float | None
+    months: int
+    active_well_months: int
+    stop_events: int
+    start_events: int
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "year": self.year,
+            "npv_mln_rub": self.npv_mln_rub,
+            "cumulative_mln_rub": self.cumulative_mln_rub,
+            "months": self.months,
+            "active_well_months": self.active_well_months,
+            "stop_events": self.stop_events,
+            "start_events": self.start_events,
+            "metadata": dict(self.metadata),
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class ChddResult:
     """Итог экономического расчёта вместе с происхождением."""
@@ -125,6 +166,7 @@ class ChddResult:
     profitability_index: float
     economic_month_count: int
     months_by_year: dict[str, int]
+    yearly_profile: tuple[AnnualChddRow, ...]
     start_date: str
     last_economic_month: str | None
     source_max_date: str | None
@@ -151,6 +193,7 @@ class ChddResult:
             "profitability_index": self.profitability_index,
             "economic_month_count": self.economic_month_count,
             "months_by_year": dict(self.months_by_year),
+            "yearly_profile": [row.to_json() for row in self.yearly_profile],
             "economic_start_date": self.start_date,
             "last_economic_month": self.last_economic_month,
             "source_max_date": self.source_max_date,
@@ -172,6 +215,13 @@ class ChddResult:
         }
 
 
+def _annual_money(entry: Mapping[str, Any], keys: tuple[str, ...], where: str) -> float | None:
+    for key in keys:
+        if key in entry:
+            return _require_number(entry, key, where)
+    return None
+
+
 def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
     """Строго разобрать результат официального калькулятора.
 
@@ -189,6 +239,7 @@ def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
     monthly = _require_sequence(result, "fieldMonthly", "result")
 
     months_by_year: dict[str, int] = {}
+    yearly_profile: list[AnnualChddRow] = []
     active_well_months = 0
     stop_events = 0
     start_events = 0
@@ -197,10 +248,31 @@ def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
         if not isinstance(entry, Mapping):
             raise ChddResultSchemaError(f"CHDD result: {where} must be an object")
         year = _require_count(entry, "year", where)
-        months_by_year[str(year)] = _require_count(entry, "months", where)
-        active_well_months += _require_count(entry, "activeWellMonths", where)
-        stop_events += _require_count(entry, "stopCount", where)
-        start_events += _require_count(entry, "startCount", where)
+        months = _require_count(entry, "months", where)
+        active = _require_count(entry, "activeWellMonths", where)
+        stops = _require_count(entry, "stopCount", where)
+        starts = _require_count(entry, "startCount", where)
+        npv = _annual_money(entry, ANNUAL_NPV_KEYS, where)
+        if npv is None:
+            raise ChddResultSchemaError(f"CHDD result: {where}.yearly NPV is missing")
+        cumulative = _annual_money(entry, ANNUAL_CUMULATIVE_KEYS, where)
+        metadata = {str(key): value for key, value in entry.items() if key not in ANNUAL_CORE_KEYS}
+        months_by_year[str(year)] = months
+        active_well_months += active
+        stop_events += stops
+        start_events += starts
+        yearly_profile.append(
+            AnnualChddRow(
+                year=year,
+                npv_mln_rub=npv,
+                cumulative_mln_rub=cumulative,
+                months=months,
+                active_well_months=active,
+                stop_events=stops,
+                start_events=starts,
+                metadata=metadata,
+            )
+        )
 
     last_economic_month: str | None = None
     for index, entry in enumerate(monthly):
@@ -222,6 +294,7 @@ def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
         profitability_index=_require_number(summary, "profitabilityIndex", "result.summary"),
         economic_month_count=len(monthly),
         months_by_year=months_by_year,
+        yearly_profile=tuple(yearly_profile),
         start_date=_require_text(result, "startDate", "result"),
         last_economic_month=last_economic_month,
         source_max_date=_optional_text(diagnostics, "sourceMaxDate"),

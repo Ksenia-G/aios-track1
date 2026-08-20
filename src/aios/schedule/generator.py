@@ -101,7 +101,7 @@ def _step_lines(step: ScheduleStep) -> list[str]:
 
 
 def render_schedule(schedule: Schedule, case: Case, *, policy_id: str) -> str:
-    """Собрать текст `wells_schedule.inc`."""
+    """Собрать текст управляемого окна `wells_schedule.inc`."""
 
     canonical = schedule.canonical()
     if not canonical.steps:
@@ -131,6 +131,37 @@ def render_schedule(schedule: Schedule, case: Case, *, policy_id: str) -> str:
     for step in canonical.steps:
         lines.extend(_step_lines(step))
     return "\n".join(lines) + "\n"
+
+
+def render_full_schedule(
+    schedule: Schedule,
+    case: Case,
+    *,
+    history_text: str,
+    policy_id: str,
+    history_start_date: date,
+) -> str:
+    """Собрать полный `wells_schedule.inc`: история байт-в-байт + новое окно.
+
+    История не перерисовывается генератором: байты официального источника
+    являются неизменяемым префиксом. MAS позже сможет менять только часть,
+    которая начинается с первого `DATES` окна управления.
+    """
+
+    if not history_text:
+        raise ScheduleRenderError("source history is empty; refusing to publish partial schedule")
+    management_text = render_schedule(schedule, case, policy_id=policy_id)
+    start_line = f"-- source history start: {history_start_date.isoformat()}\n"
+    separator = "" if history_text.endswith("\n") else "\n"
+    return history_text + separator + start_line + management_text
+
+
+def preserved_history_sha256(schedule_text: str, history_text: str) -> str:
+    """SHA-256 сохранённого исторического префикса полного расписания."""
+
+    if not schedule_text.startswith(history_text):
+        raise ScheduleRenderError("full schedule does not preserve source history bytes")
+    return hashlib.sha256(schedule_text[: len(history_text)].encode("utf-8")).hexdigest()
 
 
 def schedule_sha256(text: str) -> str:

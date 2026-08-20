@@ -13,7 +13,7 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from math import isfinite
 from pathlib import Path
@@ -47,11 +47,39 @@ class HistorySpec:
 
 
 @dataclass(frozen=True, slots=True)
+class OfficialRealizedConstraintSpec:
+    """Hard organizer constraints checked on realized simulator trajectories."""
+
+    producer_bhp_min: float | None = None
+    injector_bhp_max: float | None = None
+    producer_wlpr_max: float = TRACK1_WLPR_HARD_MAX
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBoundsSpec:
+    """Command/search bounds used before simulation. They are not official truth."""
+
+    producer_lrat_max: float | None = None
+    injector_rate_max: float | None = None
+    field_injection_rate_max: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationSpec:
+    """Future official compensation gate. Formula is intentionally absent."""
+
+    status: str = "NOT_APPLICABLE"
+    corridor_min: float | None = None
+    corridor_max: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ConstraintSpec:
     """Технологические ограничения кейса.
 
-    `producer_wlpr_max` не может превышать `TRACK1_WLPR_HARD_MAX`: более мягкий
-    кейс просто не досчитается до конца.
+    `producer_wlpr_max` сохранён как обратимо совместимый search-bound для
+    команд LRAT. Официальный предел Track-1 относится к реализованной WLPR
+    траектории и живёт отдельно в `official_realized`.
     """
 
     producer_wlpr_max: float = TRACK1_WLPR_HARD_MAX
@@ -62,6 +90,29 @@ class ConstraintSpec:
     injector_bhp_max: float | None = None
     injector_rate_max: float | None = None
     field_injection_rate_max: float | None = None
+    compensation: CompensationSpec = field(default_factory=CompensationSpec)
+    official_realized: OfficialRealizedConstraintSpec = field(init=False)
+    search_bounds: SearchBoundsSpec = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "official_realized",
+            OfficialRealizedConstraintSpec(
+                producer_bhp_min=self.producer_bhp_min,
+                injector_bhp_max=self.injector_bhp_max,
+                producer_wlpr_max=TRACK1_WLPR_HARD_MAX,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "search_bounds",
+            SearchBoundsSpec(
+                producer_lrat_max=self.producer_wlpr_max,
+                injector_rate_max=self.injector_rate_max,
+                field_injection_rate_max=self.field_injection_rate_max,
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +188,23 @@ class Case:
                 "injector_bhp_max": self.constraints.injector_bhp_max,
                 "injector_rate_max": self.constraints.injector_rate_max,
                 "field_injection_rate_max": self.constraints.field_injection_rate_max,
+                "official_realized": {
+                    "producer_bhp_min": self.constraints.official_realized.producer_bhp_min,
+                    "injector_bhp_max": self.constraints.official_realized.injector_bhp_max,
+                    "producer_wlpr_max": self.constraints.official_realized.producer_wlpr_max,
+                },
+                "search_bounds": {
+                    "producer_lrat_max": self.constraints.search_bounds.producer_lrat_max,
+                    "injector_rate_max": self.constraints.search_bounds.injector_rate_max,
+                    "field_injection_rate_max": (
+                        self.constraints.search_bounds.field_injection_rate_max
+                    ),
+                },
+                "compensation": {
+                    "status": self.constraints.compensation.status,
+                    "corridor_min": self.constraints.compensation.corridor_min,
+                    "corridor_max": self.constraints.compensation.corridor_max,
+                },
             },
             "economics": {
                 "calculator_root": str(self.economics.calculator_root),
@@ -281,6 +349,12 @@ def parse_case(payload: Mapping[str, Any], *, base_dir: Path) -> Case:
     allow_conversion = bool(constraints_raw.get("allow_producer_to_injector", False))
     if allow_conversion:
         raise CaseError("constraints: producer -> injector conversion is forbidden on track 1")
+    compensation_gate = str(constraints_raw.get("compensation_gate", "NOT_APPLICABLE")).upper()
+    if compensation_gate == "REQUIRED":
+        raise CaseError("COMPENSATION_DEFINITION_UNRESOLVED")
+    if compensation_gate not in {"NOT_APPLICABLE", "UNRESOLVED"}:
+        raise CaseError(f"constraints.compensation_gate: unsupported value {compensation_gate!r}")
+
     constraints = ConstraintSpec(
         producer_wlpr_max=wlpr_max,
         allowed_producer_controls=_as_upper_tuple(
@@ -303,6 +377,17 @@ def parse_case(payload: Mapping[str, Any], *, base_dir: Path) -> Case:
         ),
         field_injection_rate_max=_as_optional_float(
             constraints_raw.get("field_injection_rate_max"), "constraints.field_injection_rate_max"
+        ),
+        compensation=CompensationSpec(
+            status=compensation_gate,
+            corridor_min=_as_optional_float(
+                constraints_raw.get("compensation_corridor_min"),
+                "constraints.compensation_corridor_min",
+            ),
+            corridor_max=_as_optional_float(
+                constraints_raw.get("compensation_corridor_max"),
+                "constraints.compensation_corridor_max",
+            ),
         ),
     )
 

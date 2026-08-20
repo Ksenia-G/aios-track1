@@ -22,12 +22,14 @@ from aios.opm.summary import SummaryReadError
 from aios.opm.workspace import prepare_workspace
 from aios.pipeline import (
     CLAIMED_NPV_FILENAME,
+    CONSTRAINT_REPORT_FILENAME,
     FINAL_ARTIFACTS,
     RUN_MANIFEST_FILENAME,
     SCHEDULE_FILENAME,
     STATUS_FAILED,
     VALIDATION_REPORT_FILENAME,
     VERDICT_BLOCKED,
+    YEARLY_NPV_PROFILE_FILENAME,
     invalidate_package,
     run_validation_pipeline,
 )
@@ -45,6 +47,12 @@ def seed_previous_success(output_dir: Path) -> dict[str, Path]:
     paths[CLAIMED_NPV_FILENAME].write_text(
         json.dumps({"case_id": "mini", "npv_mln_rub": STALE_NPV, "simulation_status": "PASS"}),
         "utf-8",
+    )
+    paths[YEARLY_NPV_PROFILE_FILENAME].write_text(
+        json.dumps({"status": "PASSED", "total_npv_mln_rub": STALE_NPV}), "utf-8"
+    )
+    paths[CONSTRAINT_REPORT_FILENAME].write_text(
+        json.dumps({"status": "PASS", "realized_constraints_status": "PASS"}), "utf-8"
     )
     paths[VALIDATION_REPORT_FILENAME].write_text(
         json.dumps({"status": "PASSED", "verdict": "READY", "npv": STALE_NPV}), "utf-8"
