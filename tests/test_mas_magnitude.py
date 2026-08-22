@@ -113,9 +113,16 @@ def _imported_names(tree: ast.Module) -> set[str]:
 
 
 def test_only_magnitude_module_imports_numerical_schedule_controls() -> None:
+    # invariants.py (MAS-INVARIANTS-001) is the second and only other
+    # recognized boundary module: it audits/compares already-resolved
+    # controls (HOLD carry-forward, canonical identity) but does not decide
+    # which controls to produce -- that remains magnitude.py's job. The
+    # shared constant is the single source of truth for this boundary set.
+    from aios.mas.invariants import NUMERICAL_CONTROL_BOUNDARY_MODULES
+
     offenders: list[str] = []
     for path in sorted(MAS_SRC_DIR.glob("*.py")):
-        if path.name in {"magnitude.py", "__init__.py"}:
+        if path.name in NUMERICAL_CONTROL_BOUNDARY_MODULES or path.name == "__init__.py":
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         imported = _imported_names(tree)

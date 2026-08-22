@@ -36,7 +36,27 @@ from aios.mas.intents import (
     ProductionIntent,
     net_total_effect_for,
 )
-from aios.mas.magnitude import MagnitudeCandidate, MagnitudeCandidateError
+from aios.mas.invariants import (
+    DECISION_LAYER_TYPES,
+    NUMERICAL_CONTROL_BOUNDARY_MODULES,
+    MasInvariantError,
+    audit_numerical_control_imports,
+    canonical_control_digest,
+    canonical_control_snapshot,
+    require_ablation_equivalence,
+    require_candidate_preservation,
+    require_hold_carry_forward,
+    require_no_baseline_field,
+    require_no_numerical_controls_before_magnitude,
+    require_numerical_control_import_boundary,
+    require_simulation_floor,
+)
+from aios.mas.magnitude import (
+    MagnitudeCandidate,
+    MagnitudeCandidateError,
+    injector_control_to_json,
+    producer_control_to_json,
+)
 from aios.mas.proposals import (
     GroundingReport,
     InjectionAgentOutput,
@@ -47,10 +67,12 @@ from aios.mas.proposals import (
     ProposalError,
     ProposalProvenance,
 )
-from aios.mas.protocols import Agent, MagnitudeResolver
+from aios.mas.protocols import Agent, MagnitudeResolver, SpecialistPromptBuilder
 
 __all__ = [
+    "DECISION_LAYER_TYPES",
     "MAS_CONTRACT_SCHEMA_VERSION",
+    "NUMERICAL_CONTROL_BOUNDARY_MODULES",
     "Agent",
     "AgentRole",
     "ArbiterDecision",
@@ -75,6 +97,7 @@ __all__ = [
     "MagnitudeCandidate",
     "MagnitudeCandidateError",
     "MagnitudeResolver",
+    "MasInvariantError",
     "MemorySlice",
     "NetTotalEffect",
     "ProductionAction",
@@ -89,6 +112,19 @@ __all__ = [
     "ProposalSource",
     "Round2Request",
     "SimulationBudget",
+    "SpecialistPromptBuilder",
     "UncertaintyLevel",
+    "audit_numerical_control_imports",
+    "canonical_control_digest",
+    "canonical_control_snapshot",
+    "injector_control_to_json",
     "net_total_effect_for",
+    "producer_control_to_json",
+    "require_ablation_equivalence",
+    "require_candidate_preservation",
+    "require_hold_carry_forward",
+    "require_no_baseline_field",
+    "require_no_numerical_controls_before_magnitude",
+    "require_numerical_control_import_boundary",
+    "require_simulation_floor",
 ]

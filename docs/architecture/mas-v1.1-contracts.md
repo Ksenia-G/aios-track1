@@ -169,6 +169,70 @@ Envelope, а не участвует напрямую в candidate selection. П
 отдельная безопасная задача `MAS-DIAGNOSTICS-001`, вне рамок этой работы; в
 этой задаче их код и поведение не менялись.
 
+## 10. Системные инварианты T1--T7 (`aios.mas.invariants`)
+
+`aios.mas.invariants` -- deterministic guard layer поверх замороженных
+контрактов. Это не pipeline: ни Orchestrator, ни PredictiveSafetyScreen, ни
+MagnitudeResolver здесь не реализованы. Каждый guard -- reusable assertion,
+которую обязан вызвать соответствующий будущий компонент. Ниже чётко
+разделено, что доказано структурно уже сейчас, а что -- только guard,
+ожидающий подключения будущего pipeline stage.
+
+### A. STRUCTURALLY ENFORCED NOW
+
+- **T1 (anti-anchoring).** `ProductionEnvelope`/`InjectionEnvelope` уже не
+  содержат baseline-поля -- это факт формы dataclass, проверяемый
+  `dataclasses.fields()` (I1/I2). Сигнатура `SpecialistPromptBuilder.build(envelope)`
+  структурно не принимает второй (baseline) аргумент (I3).
+- **T2 (no setpoints cross).** Ни один decision-layer тип
+  (`ProductionIntent`, `InjectionIntent`, `ProductionProposal`,
+  `InjectionProposal`, `ProductionAgentOutput`, `InjectionAgentOutput`,
+  `ProductionEnvelope`, `InjectionEnvelope`, `ArbiterEnvelope`,
+  `DecisionBundle`, `ArbiterDecision`) не содержит поля типа
+  `ProducerControl`/`InjectorControl` -- проверено структурно (I4) и AST-аудитом
+  импортов пакета `aios.mas` (I5). Единственные два модуля, которым разрешено
+  импортировать эти типы -- `magnitude.py` (производит controls) и
+  `invariants.py` (сравнивает/дайджестирует уже resolved controls, решений не
+  принимает). `MagnitudeCandidate` остаётся единственной точкой, где controls
+  реально появляются (I6).
+- **T7 (canonical identity), для явно переданного control-снимка.**
+  `canonical_control_snapshot`/`canonical_control_digest` уже сейчас
+  детерминированы и order-independent для любого переданного набора
+  `ProducerControl`/`InjectorControl` -- это чистые функции, доказанные
+  прямыми тестами (I25--I27), а не наблюдение за реальным pipeline.
+
+### B. RUNTIME GUARD AVAILABLE, MUST BE CALLED BY FUTURE COMPONENT
+
+- **T3 (simulation floor).** `require_simulation_floor(candidates)` уже
+  реализована и протестирована на сконструированных `MagnitudeCandidate`
+  (I7--I10), но MagnitudeResolver не существует -- поэтому end-to-end
+  гарантия "HOLD и DETERMINISTIC_BASELINE реально дошли до симуляции" станет
+  полной только тогда, когда реальный resolver будет обязан вызывать этот
+  guard на своём выходе.
+- **T4 (safety screen is not a filter).** `require_candidate_preservation(before_ids, after_ids)`
+  реализована и протестирована как чистая multiset-проверка (I11--I14), но
+  PredictiveSafetyScreen не существует -- guard ничем не защищён от того,
+  что будущий Screen забудет его вызвать.
+- **T5 (fair LLM ablation).** `require_ablation_equivalence(config_a, config_b)`
+  реализована и протестирована на произвольных `Mapping[str, JsonValue]`
+  (I15--I20), но ни Orchestrator, ни variant-конфигурация Variant B/D не
+  существуют -- end-to-end справедливость сравнения станет доказанной только
+  тогда, когда реальный ablation harness будет обязан прогонять оба варианта
+  через этот guard.
+- **T6 (HOLD carry-forward).** `require_hold_carry_forward(...)` реализована
+  и протестирована на произвольных парах control-множеств (I21--I24), но
+  pipeline-стадии, которая реально обрабатывает `HOLD` (перенос предыдущих
+  resolved controls вперёд), не существует -- guard ждёт, что эта будущая
+  стадия будет обязана вызывать его перед коммитом held-controls.
+
+### Что это НЕ означает
+
+Ни один из guard'ов T3--T6 не является доказательством того, что
+соответствующий будущий компонент действительно вызывает его -- guard'ы
+только делают нарушение проверяемым и явным для того, кто это подключит.
+Присутствие функции в `aios.mas.invariants` -- это контракт "вызови меня",
+а не автоматическая защита работающей системы, которой пока нет.
+
 ## Что не входит в этот контрактный слой
 
 Production/Injection agent behavior, PromptBuilder, InputValidator,

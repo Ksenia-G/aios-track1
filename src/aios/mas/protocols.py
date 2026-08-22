@@ -14,6 +14,7 @@ from aios.mas.magnitude import MagnitudeCandidate
 
 TInput_contra = TypeVar("TInput_contra", contravariant=True)
 TOutput_co = TypeVar("TOutput_co", covariant=True)
+TEnvelope_contra = TypeVar("TEnvelope_contra", contravariant=True)
 
 
 @runtime_checkable
@@ -38,3 +39,16 @@ class MagnitudeResolver(Protocol):
     """
 
     def resolve(self, decision: ArbiterDecision) -> tuple[MagnitudeCandidate, ...]: ...
+
+
+@runtime_checkable
+class SpecialistPromptBuilder(Protocol[TEnvelope_contra]):
+    """Граница будущего PromptBuilder (T1, anti-anchoring).
+
+    Сигнатура сама по себе -- часть инварианта: build() принимает ровно один
+    аргумент, envelope. Baseline вторым аргументом передать невозможно,
+    потому что для него здесь нет параметра. Реализация (сборка текста
+    промпта, LLM-вызов) -- вне этой задачи.
+    """
+
+    def build(self, envelope: TEnvelope_contra) -> str: ...

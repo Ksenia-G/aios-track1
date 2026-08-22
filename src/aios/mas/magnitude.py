@@ -30,7 +30,7 @@ def _require_text(value: str, where: str) -> str:
     return value
 
 
-def _producer_to_json(control: ProducerControl) -> dict[str, JsonValue]:
+def producer_control_to_json(control: ProducerControl) -> dict[str, JsonValue]:
     return {
         "well": control.well,
         "status": str(control.status),
@@ -40,7 +40,7 @@ def _producer_to_json(control: ProducerControl) -> dict[str, JsonValue]:
     }
 
 
-def _injector_to_json(control: InjectorControl) -> dict[str, JsonValue]:
+def injector_control_to_json(control: InjectorControl) -> dict[str, JsonValue]:
     return {
         "well": control.well,
         "phase": control.phase,
@@ -110,8 +110,8 @@ class MagnitudeCandidate:
             "candidate_kind": str(canonical.candidate_kind),
             "bundle_digest": canonical.bundle_digest,
             "effective_date": canonical.effective_date.isoformat(),
-            "producers": [_producer_to_json(control) for control in canonical.producers],
-            "injectors": [_injector_to_json(control) for control in canonical.injectors],
+            "producers": [producer_control_to_json(control) for control in canonical.producers],
+            "injectors": [injector_control_to_json(control) for control in canonical.injectors],
             "source_intent_digests": list(canonical.source_intent_digests),
             "resolver_version": canonical.resolver_version,
         }
