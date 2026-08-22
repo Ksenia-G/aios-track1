@@ -32,7 +32,11 @@ TRACKED_TEXT_SUFFIXES = {".py", ".json", ".toml", ".md", ".csv", ".cfg", ".ini",
 
 # Тесты, которые сами проверяют отсутствие маркеров и потому обязаны их
 # упоминать в собственных утверждениях.
-MARKER_ASSERTION_FILES = {"tests/test_portability.py", "tests/test_kt1_demo.py"}
+MARKER_ASSERTION_FILES = {
+    "tests/test_portability.py",
+    "tests/test_kt1_demo.py",
+    "tests/test_exp004.py",
+}
 
 
 def _tracked_text_files() -> list[Path]:
