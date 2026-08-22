@@ -159,15 +159,21 @@ authority остаётся у Case constraints и Guardian.
 allocation, а не утверждение о нулевой межблоковой связности. `ResponseMap`
 как динамически выводимое evidence future работы здесь не реализован.
 
-## 9. Pressure/Sweep -- legacy-названные diagnostic services
+## 9. Pressure/Sweep -- diagnostic services (canonical naming: `MAS-DIAGNOSTICS-001`)
 
-`src/aios/agents/pressure_agent.py` и `src/aios/agents/sweep_agent.py`
-исторически называются agents в коде, но архитектурно в контексте v1.1 они
-считаются diagnostic/evidence services: их выход попадает в
-`pressure_diagnostic`/`sweep_diagnostic` (`EvidenceArtifact`) внутри
-Envelope, а не участвует напрямую в candidate selection. Переименование --
-отдельная безопасная задача `MAS-DIAGNOSTICS-001`, вне рамок этой работы; в
-этой задаче их код и поведение не менялись.
+Канонический import path: `aios.diagnostics.PressureDiagnostic` /
+`aios.diagnostics.SweepDiagnostic`. Это deterministic evidence/diagnostic
+services, не cognitive MAS agents: их typed output (`PressureProposal`/
+`SweepProposal`) попадает в `pressure_diagnostic`/`sweep_diagnostic`
+(`EvidenceArtifact`) внутри Envelope через будущий EvidenceBuilder adapter,
+а не участвует напрямую в candidate selection.
+
+Исторические имена `aios.agents.pressure_agent.PressureAgent` и
+`aios.agents.sweep_agent.SweepAgent` сохранены как рабочий compatibility
+layer -- `PressureDiagnostic`/`SweepDiagnostic` являются тонкими
+subclass-обёртками над ними без единого изменения формул, thresholds или
+физических допущений. Подробности -- в
+`docs/architecture/mas-v1.1-diagnostics.md`.
 
 ## 10. Системные инварианты T1--T7 (`aios.mas.invariants`)
 
