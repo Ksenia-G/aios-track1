@@ -33,8 +33,8 @@ controller-001       controller-001        orchestrator-001
 | Участник | Ветка |
 |---|---|
 | Ксения | `feature/injection-controller-001` |
-| Елизавета Вшивцева | `feature/production-controller-001` |
-| Елизавета Доценко | `feature/closed-loop-orchestrator-001` |
+| Лиза В. | `feature/production-controller-001` |
+| Лиза Д. | `feature/closed-loop-orchestrator-001` |
 | Марк | `feature/runtime-execution-001` |
 
 Ни одна из этих веток не создаётся в рамках текущей задачи (`TEAM-READY-001`)
@@ -96,8 +96,8 @@ feature-ветки.
 | Участник | Write zone |
 |---|---|
 | Ксения | `src/aios/mas/specialists/injection/` (будет создан на её ветке) + её тесты |
-| Вшивцева | `src/aios/mas/specialists/production/` (будет создан на её ветке) + её тесты |
-| Доценко | `src/aios/mas/orchestration/` (будет создан на её ветке) + orchestration-тесты |
+| Лиза В. | `src/aios/mas/specialists/production/` (будет создан на её ветке) + её тесты |
+| Лиза Д. | `src/aios/mas/orchestration/` (будет создан на её ветке) + orchestration-тесты |
 | Марк | runtime/execution/geology-зоны, определённые discovery на его ветке + его тесты |
 
 `tests/support/` -- общий test-only слой, созданный этой задачей; любой

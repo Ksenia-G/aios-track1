@@ -1,4 +1,4 @@
-# Production Controller -- Елизавета Вшивцева
+# Production Controller -- Лиза В.
 
 ## MISSION
 
@@ -95,7 +95,7 @@ ProductionEnvelope
 
 ## PredictiveSafetyScreen (резерв, НЕ в этой задаче)
 
-За Вшивцевой резервируется отдельная будущая задача:
+За Лизой В. резервируется отдельная будущая задача:
 `PredictiveSafetyScreen`. Не реализовывать её в первом deliverable. Когда
 придёт время: Screen может только **annotate/rank**, сохраняя exact
 cardinality и identity кандидатов (`aios.mas.invariants.require_candidate_preservation`).
@@ -132,5 +132,5 @@ input, тест на grounded-only proposal.
 ## HANDOFF TO NEXT COMPONENT
 
 `ProductionAgentOutput` уходит в `ArbiterEnvelope.production_output`,
-который собирает central integration owner. Orchestrator (Доценко) вызывает
+который собирает central integration owner. Orchestrator (Лиза Д.) вызывает
 Production Controller как часть своей pipeline-стадии.

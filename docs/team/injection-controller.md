@@ -147,4 +147,4 @@ STAGES), где LLM-провайдер может быть injected fake -- чт
 `InjectionAgentOutput` уходит в `ArbiterEnvelope.injection_output`
 (central integration owner собирает `ArbiterEnvelope` из выходов обоих
 специалистов). Ксения не вызывает Arbiter сама -- это делает Orchestrator
-(Доценко) на своей стадии pipeline.
+(Лиза Д.) на своей стадии pipeline.

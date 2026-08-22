@@ -1,4 +1,4 @@
-# Closed-Loop Orchestrator -- Елизавета Доценко
+# Closed-Loop Orchestrator -- Лиза Д.
 
 ## MISSION
 

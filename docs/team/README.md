@@ -77,8 +77,8 @@ ProductionProposal    InjectionProposal
 - Arbiter -- **не реализован** (central integration owner).
 - MagnitudeResolver -- **не реализован** (central integration owner,
   numerical intensity mapping тоже).
-- PredictiveSafetyScreen -- **не реализован** (резерв за Вшивцевой).
-- Closed-loop Orchestrator -- **не реализован** (резерв за Доценко).
+- PredictiveSafetyScreen -- **не реализован** (резерв за Лизой В.).
+- Closed-loop Orchestrator -- **не реализован** (резерв за Лизой Д.).
 - Runtime execution adapter (ScheduleCompiler/SimulatorRuntime integration
   поверх MagnitudeCandidate) -- **не реализован** (резерв за Марком).
 - LLM provider/PromptBuilder/GroundingAuditor/ProposalCompiler -- **не
@@ -91,8 +91,8 @@ ProductionProposal    InjectionProposal
 | Роль | Документ |
 |---|---|
 | Ксения -- Injection Controller | [injection-controller.md](injection-controller.md) |
-| Елизавета Вшивцева -- Production Controller (+ будущий PredictiveSafetyScreen) | [production-controller.md](production-controller.md) |
-| Елизавета Доценко -- Closed-Loop Orchestrator | [closed-loop-orchestrator.md](closed-loop-orchestrator.md) |
+| Лиза В. -- Production Controller (+ будущий PredictiveSafetyScreen) | [production-controller.md](production-controller.md) |
+| Лиза Д. -- Closed-Loop Orchestrator | [closed-loop-orchestrator.md](closed-loop-orchestrator.md) |
 | Марк -- Runtime / Execution / Geology | [runtime-execution.md](runtime-execution.md) |
 
 Общие документы:
