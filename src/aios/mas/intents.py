@@ -82,7 +82,10 @@ def _validate_rationale_short(value: str, where: str) -> None:
     """
     text = value.strip()
     _require(bool(text), f"{where}: rationale_short must be non-empty for a non-HOLD intent")
-    _require(len(text) <= MAX_RATIONALE_CHARS, f"{where}: rationale_short exceeds {MAX_RATIONALE_CHARS} chars")
+    _require(
+        len(text) <= MAX_RATIONALE_CHARS,
+        f"{where}: rationale_short exceeds {MAX_RATIONALE_CHARS} chars",
+    )
     sentence_count = len([part for part in re.split(r"[.!?]+", text) if part.strip()])
     _require(
         sentence_count <= MAX_RATIONALE_SENTENCES,
@@ -116,12 +119,21 @@ class ProductionIntent:
             _require(not self.target_wells, f"{where}.HOLD: target_wells must be empty")
             _require(not self.target_regions, f"{where}.HOLD: target_regions must be empty")
         elif action is ProductionAction.INCREASE_OFFTAKE:
-            _require(self.direction is Direction.UP, f"{where}.INCREASE_OFFTAKE: direction must be UP")
-            _require(self.intensity is not Intensity.NONE, f"{where}.INCREASE_OFFTAKE: intensity required")
+            _require(
+                self.direction is Direction.UP, f"{where}.INCREASE_OFFTAKE: direction must be UP"
+            )
+            _require(
+                self.intensity is not Intensity.NONE,
+                f"{where}.INCREASE_OFFTAKE: intensity required",
+            )
             _require(bool(self.target_wells), f"{where}.INCREASE_OFFTAKE: target_wells required")
         elif action is ProductionAction.REDUCE_OFFTAKE:
-            _require(self.direction is Direction.DOWN, f"{where}.REDUCE_OFFTAKE: direction must be DOWN")
-            _require(self.intensity is not Intensity.NONE, f"{where}.REDUCE_OFFTAKE: intensity required")
+            _require(
+                self.direction is Direction.DOWN, f"{where}.REDUCE_OFFTAKE: direction must be DOWN"
+            )
+            _require(
+                self.intensity is not Intensity.NONE, f"{where}.REDUCE_OFFTAKE: intensity required"
+            )
             _require(bool(self.target_wells), f"{where}.REDUCE_OFFTAKE: target_wells required")
         elif action is ProductionAction.SHUT_IN:
             _require(self.direction is Direction.NONE, f"{where}.SHUT_IN: direction must be NONE")
@@ -133,13 +145,20 @@ class ProductionIntent:
             _require(bool(self.target_wells), f"{where}.REOPEN: target_wells required")
         elif action is ProductionAction.REBALANCE_WITHIN_BLOCK:
             _require(
-                self.direction is Direction.NONE, f"{where}.REBALANCE_WITHIN_BLOCK: direction must be NONE"
+                self.direction is Direction.NONE,
+                f"{where}.REBALANCE_WITHIN_BLOCK: direction must be NONE",
             )
             _require(
-                self.intensity is not Intensity.NONE, f"{where}.REBALANCE_WITHIN_BLOCK: intensity required"
+                self.intensity is not Intensity.NONE,
+                f"{where}.REBALANCE_WITHIN_BLOCK: intensity required",
             )
-            _require(bool(self.target_wells), f"{where}.REBALANCE_WITHIN_BLOCK: target_wells required")
-            _require(bool(self.target_regions), f"{where}.REBALANCE_WITHIN_BLOCK: target_regions required")
+            _require(
+                bool(self.target_wells), f"{where}.REBALANCE_WITHIN_BLOCK: target_wells required"
+            )
+            _require(
+                bool(self.target_regions),
+                f"{where}.REBALANCE_WITHIN_BLOCK: target_regions required",
+            )
 
         if action is not ProductionAction.HOLD:
             _require(bool(self.evidence_ids), f"{where}: non-HOLD intent requires evidence_ids")
@@ -195,45 +214,89 @@ class InjectionIntent:
                 self.direction in (Direction.UP, Direction.DOWN),
                 f"{where}.SCALE_TOTAL_INJECTION: direction must be UP or DOWN",
             )
-            _require(self.intensity is not Intensity.NONE, f"{where}.SCALE_TOTAL_INJECTION: intensity required")
-            _require(not self.donor_wells, f"{where}.SCALE_TOTAL_INJECTION: donor_wells must be empty")
-            _require(not self.recipient_wells, f"{where}.SCALE_TOTAL_INJECTION: recipient_wells must be empty")
+            _require(
+                self.intensity is not Intensity.NONE,
+                f"{where}.SCALE_TOTAL_INJECTION: intensity required",
+            )
+            _require(
+                not self.donor_wells, f"{where}.SCALE_TOTAL_INJECTION: donor_wells must be empty"
+            )
+            _require(
+                not self.recipient_wells,
+                f"{where}.SCALE_TOTAL_INJECTION: recipient_wells must be empty",
+            )
         elif action is InjectionAction.SUPPORT_REGION:
-            _require(self.direction is Direction.UP, f"{where}.SUPPORT_REGION: direction must be UP")
-            _require(self.intensity is not Intensity.NONE, f"{where}.SUPPORT_REGION: intensity required")
+            _require(
+                self.direction is Direction.UP, f"{where}.SUPPORT_REGION: direction must be UP"
+            )
+            _require(
+                self.intensity is not Intensity.NONE, f"{where}.SUPPORT_REGION: intensity required"
+            )
             _require(
                 bool(self.recipient_wells) or bool(self.target_regions),
                 f"{where}.SUPPORT_REGION: recipient_wells or target_regions required",
             )
         elif action is InjectionAction.REDUCE_SUPPORT_PATH:
-            _require(self.direction is Direction.DOWN, f"{where}.REDUCE_SUPPORT_PATH: direction must be DOWN")
-            _require(self.intensity is not Intensity.NONE, f"{where}.REDUCE_SUPPORT_PATH: intensity required")
+            _require(
+                self.direction is Direction.DOWN,
+                f"{where}.REDUCE_SUPPORT_PATH: direction must be DOWN",
+            )
+            _require(
+                self.intensity is not Intensity.NONE,
+                f"{where}.REDUCE_SUPPORT_PATH: intensity required",
+            )
             _require(
                 bool(self.donor_wells) or bool(self.source_regions),
                 f"{where}.REDUCE_SUPPORT_PATH: donor_wells or source_regions required",
             )
         elif action is InjectionAction.REALLOCATE_INJECTION:
-            _require(self.direction is Direction.NONE, f"{where}.REALLOCATE_INJECTION: direction must be NONE")
-            _require(self.intensity is not Intensity.NONE, f"{where}.REALLOCATE_INJECTION: intensity required")
+            _require(
+                self.direction is Direction.NONE,
+                f"{where}.REALLOCATE_INJECTION: direction must be NONE",
+            )
+            _require(
+                self.intensity is not Intensity.NONE,
+                f"{where}.REALLOCATE_INJECTION: intensity required",
+            )
             _require(bool(self.donor_wells), f"{where}.REALLOCATE_INJECTION: donor_wells required")
-            _require(bool(self.recipient_wells), f"{where}.REALLOCATE_INJECTION: recipient_wells required")
-            _require(bool(self.source_regions), f"{where}.REALLOCATE_INJECTION: source_regions required")
-            _require(bool(self.target_regions), f"{where}.REALLOCATE_INJECTION: target_regions required")
+            _require(
+                bool(self.recipient_wells),
+                f"{where}.REALLOCATE_INJECTION: recipient_wells required",
+            )
+            _require(
+                bool(self.source_regions), f"{where}.REALLOCATE_INJECTION: source_regions required"
+            )
+            _require(
+                bool(self.target_regions), f"{where}.REALLOCATE_INJECTION: target_regions required"
+            )
             _require(
                 _canonical(self.source_regions) == _canonical(self.target_regions),
                 f"{where}.REALLOCATE_INJECTION: source_regions and target_regions must be the same scope",
             )
         elif action is InjectionAction.REBALANCE_ACROSS_BLOCKS:
             _require(
-                self.direction is Direction.NONE, f"{where}.REBALANCE_ACROSS_BLOCKS: direction must be NONE"
+                self.direction is Direction.NONE,
+                f"{where}.REBALANCE_ACROSS_BLOCKS: direction must be NONE",
             )
             _require(
-                self.intensity is not Intensity.NONE, f"{where}.REBALANCE_ACROSS_BLOCKS: intensity required"
+                self.intensity is not Intensity.NONE,
+                f"{where}.REBALANCE_ACROSS_BLOCKS: intensity required",
             )
-            _require(bool(self.donor_wells), f"{where}.REBALANCE_ACROSS_BLOCKS: donor_wells required")
-            _require(bool(self.recipient_wells), f"{where}.REBALANCE_ACROSS_BLOCKS: recipient_wells required")
-            _require(bool(self.source_regions), f"{where}.REBALANCE_ACROSS_BLOCKS: source_regions required")
-            _require(bool(self.target_regions), f"{where}.REBALANCE_ACROSS_BLOCKS: target_regions required")
+            _require(
+                bool(self.donor_wells), f"{where}.REBALANCE_ACROSS_BLOCKS: donor_wells required"
+            )
+            _require(
+                bool(self.recipient_wells),
+                f"{where}.REBALANCE_ACROSS_BLOCKS: recipient_wells required",
+            )
+            _require(
+                bool(self.source_regions),
+                f"{where}.REBALANCE_ACROSS_BLOCKS: source_regions required",
+            )
+            _require(
+                bool(self.target_regions),
+                f"{where}.REBALANCE_ACROSS_BLOCKS: target_regions required",
+            )
             _require(
                 _canonical(self.source_regions) != _canonical(self.target_regions),
                 f"{where}.REBALANCE_ACROSS_BLOCKS: source_regions and target_regions must differ",

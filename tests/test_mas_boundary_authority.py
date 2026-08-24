@@ -89,7 +89,9 @@ def test_magnitude_candidate_to_json_round_trips_through_normalize_json() -> Non
         candidate_kind=common.CandidateKind.AGENT_BUNDLE,
         bundle_digest="b" * 64,
         effective_date=datetime.date(2020, 4, 1),
-        producers=(ProducerControl(well="P1", status=WellStatus.OPEN, mode="LRAT", liquid_rate=150.0),),
+        producers=(
+            ProducerControl(well="P1", status=WellStatus.OPEN, mode="LRAT", liquid_rate=150.0),
+        ),
         injectors=(
             InjectorControl(
                 well="I1", phase="WATER", status=WellStatus.OPEN, mode="RATE", surface_rate=200.0
@@ -134,8 +136,12 @@ def test_semantically_equal_intents_from_different_construction_order_match_dige
 def test_semantically_equal_magnitude_candidates_match_digest() -> None:
     def build(order: tuple[str, str]) -> MagnitudeCandidate:
         wells = {
-            "P1": ProducerControl(well="P1", status=WellStatus.OPEN, mode="LRAT", liquid_rate=100.0),
-            "P2": ProducerControl(well="P2", status=WellStatus.OPEN, mode="LRAT", liquid_rate=200.0),
+            "P1": ProducerControl(
+                well="P1", status=WellStatus.OPEN, mode="LRAT", liquid_rate=100.0
+            ),
+            "P2": ProducerControl(
+                well="P2", status=WellStatus.OPEN, mode="LRAT", liquid_rate=200.0
+            ),
         }
         return MagnitudeCandidate(
             candidate_kind=common.CandidateKind.AGENT_BUNDLE,

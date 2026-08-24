@@ -198,7 +198,10 @@ class InjectionProposal:
 
 
 def _validate_agent_output(
-    *, primary: ProductionProposal | InjectionProposal, baseline: ProductionProposal | InjectionProposal, where: str
+    *,
+    primary: ProductionProposal | InjectionProposal,
+    baseline: ProductionProposal | InjectionProposal,
+    where: str,
 ) -> None:
     if baseline.source is not ProposalSource.DETERMINISTIC_BASELINE:
         raise ProposalError(f"{where}.baseline_proposal: source must be DETERMINISTIC_BASELINE")

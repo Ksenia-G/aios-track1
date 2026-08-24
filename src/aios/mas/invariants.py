@@ -167,9 +167,7 @@ def require_simulation_floor(candidates: Sequence[MagnitudeCandidate]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def require_candidate_preservation(
-    before_ids: Sequence[str], after_ids: Sequence[str]
-) -> None:
+def require_candidate_preservation(before_ids: Sequence[str], after_ids: Sequence[str]) -> None:
     """Annotation-стадия обязана сохранять identity set candidates ровно.
 
     Сравнение по multiset (Counter), а не по len(): порядок неважен, но
@@ -267,12 +265,8 @@ def canonical_control_snapshot(
             "producer and injector"
         )
 
-    canonical_producers = tuple(
-        sorted(dict.fromkeys(producers), key=lambda c: natural_key(c.well))
-    )
-    canonical_injectors = tuple(
-        sorted(dict.fromkeys(injectors), key=lambda c: natural_key(c.well))
-    )
+    canonical_producers = tuple(sorted(dict.fromkeys(producers), key=lambda c: natural_key(c.well)))
+    canonical_injectors = tuple(sorted(dict.fromkeys(injectors), key=lambda c: natural_key(c.well)))
     return {
         "producers": [producer_control_to_json(control) for control in canonical_producers],
         "injectors": [injector_control_to_json(control) for control in canonical_injectors],
