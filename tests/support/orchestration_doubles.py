@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, replace
 
+from aios.chdd.runner import ChddResult
 from aios.evaluation.canonical import digest
 from aios.evaluation.simulation import (
     SimulationFailure,
@@ -27,7 +28,6 @@ from aios.evaluation.simulation import (
 )
 from aios.execution import ExecutionMode, RuntimeExecution, RuntimeProvenance
 from aios.mas.magnitude import MagnitudeCandidate
-from aios.mas.orchestration import EconomicResult
 from aios.state import StateCard, WellRole
 
 SIMULATOR_IDENTITY = SimulatorIdentity(
@@ -179,6 +179,36 @@ class DeterministicRealizedStateExtractor:
         return replace(state, wells=tuple(wells))
 
 
+def chdd_result(npv_mln_rub: float, *, provenance: str = "tests.support") -> ChddResult:
+    """Minimal well-formed ChddResult carrying a given NPV."""
+    return ChddResult(
+        calculator_version="tests.support.orchestration_doubles/1.0.0",
+        provenance=provenance,
+        npv_mln_rub=npv_mln_rub,
+        profitability_index=1.0,
+        economic_month_count=1,
+        months_by_year={"2020": 1},
+        yearly_profile=(),
+        start_date="2020-04-01",
+        last_economic_month="2020-04",
+        source_max_date="2020-04-30",
+        oil_kt_total=0.0,
+        liquid_kt_total=0.0,
+        injection_k_total=0.0,
+        active_well_months=1,
+        pump_events=0,
+        stop_events=0,
+        start_events=0,
+        conversion_events=0,
+        excluded_negative_rows=0,
+        duplicate_well_months=0,
+        invalid_dates=0,
+        ignored_blank_wells=0,
+        warnings=(),
+        raw={},
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class DeterministicCHDD:
     """Reproducible economics derived from realized rates, never from a hash.
@@ -186,28 +216,21 @@ class DeterministicCHDD:
     A hash-derived pseudo-value looks like an economic ranking and is not one.
     """
 
-    def evaluate(
-        self, candidate: MagnitudeCandidate, execution: RuntimeExecution
-    ) -> EconomicResult:
+    def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
         canonical = candidate.canonical()
         produced = sum(control.liquid_rate or 0.0 for control in canonical.producers)
         injected = sum(control.surface_rate or 0.0 for control in canonical.injectors)
-        return EconomicResult(
-            value=produced - 0.25 * injected,
-            details={"produced": produced, "injected": injected},
-        )
+        return chdd_result(produced - 0.25 * injected)
 
 
 @dataclass(frozen=True, slots=True)
 class ScriptedCHDD:
-    """Returns a prepared value per candidate digest, for ordering tests."""
+    """Returns a prepared NPV per candidate digest, for ordering tests."""
 
     values: dict[str, float]
 
-    def evaluate(
-        self, candidate: MagnitudeCandidate, execution: RuntimeExecution
-    ) -> EconomicResult:
-        return EconomicResult(value=self.values[candidate.canonical().digest()])
+    def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
+        return chdd_result(self.values[candidate.canonical().digest()])
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,4 +268,5 @@ __all__ = [
     "DeterministicRealizedStateExtractor",
     "MiswiredCandidateExecutor",
     "ScriptedCHDD",
+    "chdd_result",
 ]

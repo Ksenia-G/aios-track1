@@ -58,7 +58,6 @@ from aios.mas.orchestration.boundaries import (
     CHDD,
     ArbiterLike,
     CandidateExecutor,
-    EconomicResult,
     GuardianVerdict,
     IdentityPredictiveSafetyScreen,
     PredictiveSafetyScreen,
@@ -71,6 +70,15 @@ from aios.mas.orchestration.boundaries import (
 from aios.mas.orchestration.trace import DecisionTrace, StepFailure
 from aios.mas.proposals import InjectionAgentOutput, ProductionAgentOutput
 from aios.mas.protocols import Agent, MagnitudeResolver
+from aios.mas.selection import (
+    CandidateEvaluation,
+    ChddOutcome,
+    EconomicSelectionError,
+    EconomicSelectionResult,
+    EconomicSelector,
+    GuardianOutcome,
+    SimulationOutcome,
+)
 from aios.state import StateCard
 
 SpecialistFactory = Callable[[bool], object]
@@ -236,7 +244,8 @@ class CandidateRecord:
     candidate_kind: str
     simulation_status: str | None = None
     guardian: GuardianVerdict | None = None
-    economic: EconomicResult | None = None
+    npv_mln_rub: float | None = None
+    ineligibility_reason: str | None = None
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
@@ -244,7 +253,8 @@ class CandidateRecord:
             "candidate_kind": self.candidate_kind,
             "simulation_status": self.simulation_status,
             "guardian": self.guardian.to_json() if self.guardian is not None else None,
-            "economic": self.economic.to_json() if self.economic is not None else None,
+            "npv_mln_rub": self.npv_mln_rub,
+            "ineligibility_reason": self.ineligibility_reason,
         }
 
 
@@ -264,7 +274,7 @@ class DecisionStepResult:
     candidates: tuple[CandidateRecord, ...]
     committed_candidate_digest: str
     committed_candidate: MagnitudeCandidate
-    committed_economic: EconomicResult
+    selection: EconomicSelectionResult
     next_state: StateCard
 
     def to_json(self) -> dict[str, JsonValue]:
@@ -276,7 +286,7 @@ class DecisionStepResult:
             "candidates": [record.to_json() for record in self.candidates],
             "committed_candidate_digest": self.committed_candidate_digest,
             "committed_candidate": self.committed_candidate.to_json(),
-            "committed_economic": self.committed_economic.to_json(),
+            "selection": self.selection.to_json(),
             "next_state_digest": self.next_state.digest(),
         }
 
@@ -660,91 +670,97 @@ class ClosedLoopOrchestrator:
         round2_triggered: bool,
         step_input: DecisionStepInput,
     ) -> DecisionStepResult:
-        # simulated хранит только те кандидаты, которых этот метод реально
-        # прогнал через исполнителя -- выбор ниже читает только из этого
-        # словаря, поэтому непросимулированный кандидат структурно не может
-        # дойти до коммита.
-        simulated: dict[str, tuple[MagnitudeCandidate, RuntimeExecution]] = {}
+        # Каждый кандидат исполняется ровно один раз, и его прогон
+        # принимается только вместе с провенансом, который называет именно
+        # этого кандидата.
+        evaluations: list[CandidateEvaluation] = []
+        executed: dict[str, tuple[MagnitudeCandidate, RuntimeExecution]] = {}
+        guardian_verdicts: dict[str, GuardianVerdict] = {}
+
         for candidate in candidates:
             candidate_digest = candidate.digest()
-            if candidate_digest in simulated:
-                # Один и тот же кандидат дважды сделал бы «последний победил»
-                # молчаливым, а число прогонов -- неопределённым.
+            if candidate_digest in executed:
                 raise OrchestrationError(
                     f"decision_step: duplicate candidate digest {candidate_digest!r} "
                     "in the resolved candidate set"
                 )
             execution = self._candidate_executor.execute(candidate, run_label=candidate_digest)
             _require_execution_provenance(candidate, execution)
-            simulated[candidate_digest] = (candidate, execution)
+            executed[candidate_digest] = (candidate, execution)
 
-        # Guardian судит по РЕАЛИЗОВАННОМУ состоянию прогона, а не по паре
-        # (кандидат, результат): это контракт существующего ConstraintGuardian.
-        # Кандидат, чей прогон физически не удался, до Guardian не доходит и
-        # не может стать «легальным» по умолчанию.
-        guardian_by_digest: dict[str, GuardianVerdict] = {}
-        for digest_, (candidate, execution) in simulated.items():
-            # Только полный успех даёт право на экономику: оборванная
-            # траектория даёт число, которое выглядит сравнимым с полными
-            # прогонами, но им не является.
-            if not execution.result.supports_objective_evaluation:
-                guardian_by_digest[digest_] = GuardianVerdict(
+            # Идентичность берётся из провенанса прогона, а не из ярлыка,
+            # который проставил вызывающий: ярлык не является доказательством.
+            identity = execution.provenance.candidate_digest
+            result_digest = execution.result.result_digest
+            simulation = SimulationOutcome(candidate_identity=identity, result=execution.result)
+
+            guardian_outcome: GuardianOutcome | None = None
+            chdd_outcome: ChddOutcome | None = None
+
+            # Только полный успех даёт право на легальность и экономику:
+            # оборванная траектория даёт число, которое выглядит сравнимым с
+            # полными прогонами, но им не является.
+            if execution.result.supports_objective_evaluation:
+                realized = self._realized_state_extractor.extract(candidate, execution)
+                report = self._guardian.evaluate(realized)
+                guardian_outcome = GuardianOutcome(
+                    candidate_identity=identity,
+                    simulation_result_digest=result_digest,
+                    report=report,
+                )
+                guardian_verdicts[candidate_digest] = GuardianVerdict.from_report(report)
+                if report.summary.failed == 0:
+                    chdd_outcome = ChddOutcome(
+                        candidate_identity=identity,
+                        simulation_result_digest=result_digest,
+                        result=self._chdd.evaluate(candidate, execution),
+                    )
+            else:
+                guardian_verdicts[candidate_digest] = GuardianVerdict(
                     passed=False,
                     violations=(f"simulation:{execution.result.status}",),
                 )
-                continue
-            realized = self._realized_state_extractor.extract(candidate, execution)
-            guardian_by_digest[digest_] = GuardianVerdict.from_report(
-                self._guardian.evaluate(realized)
-            )
 
-        commit_eligible = [
-            digest_ for digest_, verdict in guardian_by_digest.items() if verdict.passed
-        ]
-
-        # CHDD -- а значит и экономическое ранжирование -- считается только
-        # на подмножестве «просимулирован + прошёл Guardian», никогда на
-        # сыром наборе кандидатов. Отказ CHDD снимает кандидата с коммита,
-        # но не превращается в молчаливое «ноль».
-        economic_by_digest: dict[str, EconomicResult] = {}
-        for digest_ in commit_eligible:
-            candidate, execution = simulated[digest_]
-            try:
-                economic = self._chdd.evaluate(candidate, execution)
-            except Exception as exc:
-                raise OrchestrationError(
-                    f"decision_step: CHDD evaluation failed for candidate {digest_!r}: "
-                    f"{type(exc).__name__}"
-                ) from exc
-            if not isinstance(economic, EconomicResult):
-                raise OrchestrationError(
-                    f"decision_step: CHDD returned {type(economic).__name__} for "
-                    f"candidate {digest_!r}, expected EconomicResult"
+            evaluations.append(
+                CandidateEvaluation(
+                    candidate=candidate,
+                    simulation=simulation,
+                    guardian=guardian_outcome,
+                    chdd=chdd_outcome,
                 )
-            economic_by_digest[digest_] = economic
-
-        if not economic_by_digest:
-            raise OrchestrationError(
-                "decision_step: no candidate is both simulated and Guardian-passed; nothing to commit"
             )
 
-        # Детерминированный выбор: максимум значения CHDD, при равенстве --
-        # по дайджесту кандидата (стабильно, выведено из содержимого, без
-        # случайного порядка).
-        chosen_digest = max(economic_by_digest, key=lambda d: (economic_by_digest[d].value, d))
+        # Экономический отбор -- авторитетная зона, а не встроенный max():
+        # она же проверяет совпадение идентичностей на каждом звене цепочки
+        # (кандидат -> прогон -> Guardian -> CHDD) и объясняет каждый отказ.
+        try:
+            selection = EconomicSelector().select(evaluations)
+        except EconomicSelectionError as error:
+            raise OrchestrationError(f"decision_step: {error}") from error
+
+        chosen_digest = selection.selected.candidate_identity
+        rejected_reasons = {
+            rejection.candidate_identity: str(rejection.reason) for rejection in selection.rejected
+        }
+        eligible_npv = {
+            evaluation.candidate_identity: evaluation.chdd.result.npv_mln_rub
+            for evaluation in selection.eligible
+            if evaluation.chdd is not None
+        }
 
         records = tuple(
             CandidateRecord(
                 candidate_digest=digest_,
                 candidate_kind=str(candidate.candidate_kind),
                 simulation_status=str(execution.result.status),
-                guardian=guardian_by_digest.get(digest_),
-                economic=economic_by_digest.get(digest_),
+                guardian=guardian_verdicts.get(digest_),
+                npv_mln_rub=eligible_npv.get(digest_),
+                ineligibility_reason=rejected_reasons.get(digest_),
             )
-            for digest_, (candidate, execution) in simulated.items()
+            for digest_, (candidate, execution) in executed.items()
         )
 
-        committed_candidate, committed_execution = simulated[chosen_digest]
+        committed_candidate, committed_execution = executed[chosen_digest]
         next_state = self._state_advancer.advance(
             step_input.state, committed_candidate, committed_execution
         )
@@ -757,7 +773,7 @@ class ClosedLoopOrchestrator:
             candidates=records,
             committed_candidate_digest=chosen_digest,
             committed_candidate=committed_candidate,
-            committed_economic=economic_by_digest[chosen_digest],
+            selection=selection,
             next_state=next_state,
         )
 

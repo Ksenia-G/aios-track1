@@ -7,6 +7,7 @@ import datetime
 import pytest
 
 from aios.agents.constraint_guardian import ConstraintGuardian
+from aios.chdd.runner import ChddResult
 from aios.mas.arbiter import ArbiterDecision, DecisionBundle
 from aios.mas.common import CandidateKind, DecisionRound, ProposalSource
 from aios.mas.evidence import EvidenceArtifact
@@ -16,7 +17,6 @@ from aios.mas.orchestration import (
     ClosedLoopOrchestrator,
     DecisionStepInput,
     DecisionTrace,
-    EconomicResult,
     OrchestrationError,
     OrchestratorConfig,
     default_next_input,
@@ -39,6 +39,7 @@ from tests.support.orchestration_doubles import (
     DeterministicRealizedStateExtractor,
     MiswiredCandidateExecutor,
     ScriptedCHDD,
+    chdd_result,
 )
 
 EFFECTIVE_DATE = datetime.date(2020, 4, 1)
@@ -304,7 +305,7 @@ def test_guardian_failed_candidate_is_never_committed() -> None:
     assert any("wlpr_max" in violation for violation in agent.guardian.violations)
     assert result.committed_candidate_digest != agent.candidate_digest
     # An illegal candidate is never economically scored at all.
-    assert agent.economic is None
+    assert agent.npv_mln_rub is None
 
 
 def test_failed_simulation_cannot_become_a_pass() -> None:
@@ -342,7 +343,7 @@ def test_no_guardian_passed_candidate_is_a_closed_failure() -> None:
             agent_controls=(900.0, 150.0),
         )
     )
-    with pytest.raises(OrchestrationError, match="nothing to commit"):
+    with pytest.raises(OrchestrationError, match="no candidate is simulated, Guardian-passed"):
         orchestrator.run_decision_step(_step_input())
 
 
@@ -351,27 +352,34 @@ def test_no_guardian_passed_candidate_is_a_closed_failure() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_non_finite_economic_value_cannot_be_constructed() -> None:
-    for bad in (float("nan"), float("inf"), float("-inf")):
-        with pytest.raises(Exception, match="finite"):
-            EconomicResult(value=bad)
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_economics_never_wins_selection(bad: float) -> None:
+    """A NaN is not a bad candidate but an incomparable one.
 
-
-def test_nan_economics_cannot_win_selection() -> None:
-    """max() never replaces a NaN leader, so a NaN must not reach ordering."""
+    `max()` never replaces a NaN leader and never yields to it, so a NaN
+    reaching the ordering would silently beat objectively better candidates.
+    It has to be refused as ineligible before ranking.
+    """
     resolver = StubMagnitudeResolver()
     decision = StubArbiter().decide(_ArbiterEnvelopeStub())
     digests = [candidate.digest() for candidate in resolver.resolve(decision)]
+    poisoned = digests[0]
 
-    class NanCHDD:
-        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> EconomicResult:
-            if candidate.digest() == digests[0]:
-                return EconomicResult(value=float("nan"))
-            return EconomicResult(value=0.9)
+    class NonFiniteCHDD:
+        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> ChddResult:
+            if candidate.digest() == poisoned:
+                return chdd_result(bad)
+            return chdd_result(0.9)
 
-    orchestrator = _orchestrator(magnitude_resolver=resolver, chdd=NanCHDD())
-    with pytest.raises(OrchestrationError, match="CHDD evaluation failed"):
-        orchestrator.run_decision_step(_step_input())
+    orchestrator = _orchestrator(magnitude_resolver=resolver, chdd=NonFiniteCHDD())
+    result = orchestrator.run_decision_step(_step_input())
+
+    assert result.committed_candidate_digest != poisoned
+    rejected = {
+        rejection.candidate_identity: str(rejection.reason)
+        for rejection in result.selection.rejected
+    }
+    assert rejected[poisoned] == "NON_FINITE_CHDD_VALUE"
 
 
 def test_selection_is_the_economic_argmax_with_deterministic_tie_break() -> None:
@@ -389,17 +397,17 @@ def test_selection_is_the_economic_argmax_with_deterministic_tie_break() -> None
         chdd=ScriptedCHDD(values=dict.fromkeys(digests, 5.0)),
     ).run_decision_step(_step_input())
 
-    assert first.committed_candidate_digest == max(digests)
+    assert first.committed_candidate_digest == min(digests)
     assert first.committed_candidate_digest == second.committed_candidate_digest
 
 
 def test_chdd_failure_is_a_closed_failure() -> None:
     class ExplodingCHDD:
-        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> EconomicResult:
+        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> ChddResult:
             raise RuntimeError("economics backend down")
 
     orchestrator = _orchestrator(chdd=ExplodingCHDD())
-    with pytest.raises(OrchestrationError, match="CHDD evaluation failed"):
+    with pytest.raises(RuntimeError, match="economics backend down"):
         orchestrator.run_decision_step(_step_input())
 
 
@@ -729,7 +737,7 @@ def test_two_sequential_steps_form_a_real_closed_loop() -> None:
         )
         assert record.guardian is not None and record.guardian.passed
         assert record.simulation_status == "SUCCESS"
-        assert record.economic is not None
+        assert record.npv_mln_rub is not None
 
 
 def test_committed_controls_are_the_only_numerical_authority() -> None:

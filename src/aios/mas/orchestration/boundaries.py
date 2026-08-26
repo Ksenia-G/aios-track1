@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from aios.agents.constraint_guardian import FAIL, ConstraintReport
+from aios.chdd.runner import ChddResult
 from aios.evaluation.canonical import JsonValue
 from aios.execution import ExecutionMode, RuntimeExecution, SimulatorRuntime
 from aios.mas.arbiter import ArbiterDecision
@@ -70,29 +71,6 @@ class GuardianVerdict:
         return cls(passed=not violations, violations=violations, report=report.to_json())
 
 
-@dataclass(frozen=True, slots=True)
-class EconomicResult:
-    """Экономическая оценка кандидата.
-
-    Значение обязано быть конечным. NaN в упорядочивании ведёт себя не как
-    «плохой кандидат», а как «несравнимый»: `max()` никогда не заменит им
-    текущего лидера и одновременно никогда не уступит ему, поэтому NaN,
-    попавший первым, молча выигрывает у объективно лучших кандидатов.
-    """
-
-    value: float
-    details: JsonValue | None = None
-
-    def __post_init__(self) -> None:
-        if isinstance(self.value, bool) or not isinstance(self.value, int | float):
-            raise BoundaryError("economic_result.value: must be a real number")
-        if self.value != self.value or self.value in (float("inf"), float("-inf")):
-            raise BoundaryError(f"economic_result.value: must be finite, got {self.value!r}")
-
-    def to_json(self) -> dict[str, JsonValue]:
-        return {"value": float(self.value), "details": self.details}
-
-
 @runtime_checkable
 class ArbiterLike(Protocol):
     """Структурная арбитрация. Численных setpoints не производит."""
@@ -127,11 +105,15 @@ class RealizedConstraintGuardian(Protocol):
 
 @runtime_checkable
 class CHDD(Protocol):
-    """Экономическая оценка по кандидату и его физическому прогону."""
+    """Авторитетная экономика по кандидату и его физическому прогону.
+
+    Возвращается существующий `aios.chdd.ChddResult`, а не параллельный тип:
+    экономический отбор ниже по конвейеру ранжирует именно его NPV.
+    """
 
     def evaluate(
         self, candidate: MagnitudeCandidate, execution: RuntimeExecution
-    ) -> EconomicResult: ...
+    ) -> ChddResult: ...
 
 
 @runtime_checkable
@@ -217,7 +199,6 @@ __all__ = [
     "ArbiterLike",
     "BoundaryError",
     "CandidateExecutor",
-    "EconomicResult",
     "GuardianVerdict",
     "IdentityPredictiveSafetyScreen",
     "PredictiveSafetyScreen",
