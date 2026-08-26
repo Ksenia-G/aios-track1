@@ -166,6 +166,29 @@ def test_run_locator_mirrors_the_runtime_workspace_layout(tmp_path) -> None:
     assert unsmry.name == "MODEL_Y.UNSMRY"
 
 
+def test_summary_is_addressed_by_the_deck_case_name(model_y_case, tmp_path) -> None:
+    """The OPM case name comes from the deck path, not from the raw setting.
+
+    `HistorySpec.data_file` is the configured file name as text; only
+    `data_path` is the resolved deck path a stem can be taken from. Getting
+    this wrong is invisible until a real run has already succeeded.
+    """
+    from aios.schedule.events import Schedule
+
+    composition = build_real_closed_loop(
+        case=model_y_case,
+        history_text="-- history",
+        history_start_date=datetime.date(2020, 1, 1),
+        initial_state=_field_state(),
+        baseline=Schedule(steps=()),
+        workspace_root=tmp_path,
+    )
+    expected_stem = model_y_case.history.data_path.stem
+    smspec, unsmry = composition.locator.summary_paths("run-1", expected_stem)
+    assert smspec.name == f"{expected_stem}.SMSPEC"
+    assert unsmry.name == f"{expected_stem}.UNSMRY"
+
+
 def test_missing_opm_summary_is_a_closed_failure(tmp_path) -> None:
     """No summary means no realized state -- never a fabricated one."""
     locator = OpmRunLocator(workspace_root=tmp_path)

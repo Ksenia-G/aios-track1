@@ -102,7 +102,7 @@ class OpmRealizedStateExtractor:
 
     def extract(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> StateCard:
         run_label = execution.provenance.candidate_digest
-        summary = self.locator.read_summary(run_label, self.case.history.data_file.stem)
+        summary = self.locator.read_summary(run_label, self.case.history.data_path.stem)
         controls = well_controls_from_schedule(
             self.initial_state,
             self.baseline,
@@ -137,7 +137,7 @@ class OpmChdd:
 
     def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
         run_label = execution.provenance.candidate_digest
-        summary = self.locator.read_summary(run_label, self.case.history.data_file.stem)
+        summary = self.locator.read_summary(run_label, self.case.history.data_path.stem)
         chdd_input = build_chdd_input(summary, self.case)
         source = write_chdd_csv(chdd_input, self.locator.output_dir(run_label) / "chdd_input.csv")
         return run_chdd(self.case, chdd_input, source_file=source)
