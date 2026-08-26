@@ -315,3 +315,66 @@ class TestRestartExecution:
         )
         assert execution.result.status is SimulationStatus.NON_CONVERGED
         assert list(tmp_path.rglob("trajectory.json")) == []
+
+
+class TestResultRequestBinding:
+    """Every result the runtime returns names the request that produced it."""
+
+    def test_successful_result_is_bound_to_its_request(self, runtime, tmp_path) -> None:
+        from aios.evaluation.simulation import compute_request_digest, compute_simulation_key
+
+        facade, _case = runtime
+        execution = facade.execute(candidate(), workspace_root=tmp_path / "ws", run_label="bound")
+        assert execution.result.is_request_bound
+        assert execution.result.request_digest == compute_request_digest(execution.request)
+        assert execution.result.simulation_key == compute_simulation_key(
+            execution.request, facade._simulator.identity
+        )
+        assert execution.result.simulation_key == execution.provenance.simulation_key
+
+    def test_failed_result_is_bound_too(self, mini_case, tmp_path) -> None:
+        """A crash still belongs to a request, and must say which one."""
+        from aios.evaluation.simulation import compute_request_digest
+
+        state, baseline, history_text, start_date = read_baseline_inputs(mini_case)
+        facade = SimulatorRuntime(
+            case=mini_case,
+            simulator=ExplodingSimulator(),
+            history_text=history_text,
+            history_start_date=start_date,
+            state=state,
+            baseline=baseline,
+        )
+        execution = facade.execute(candidate(), workspace_root=tmp_path / "ws", run_label="boom")
+        assert execution.result.status is SimulationStatus.CRASHED
+        assert execution.result.is_request_bound
+        assert execution.result.request_digest == compute_request_digest(execution.request)
+
+    def test_simulator_returning_a_foreign_binding_is_refused(self, mini_case, tmp_path) -> None:
+        """A result already bound to another request is a wiring fault."""
+        from aios.evaluation.simulation import SimulationResult, SimulationStatus
+        from aios.execution import RuntimeExecutionBindingError
+
+        class ForeignBindingSimulator:
+            @property
+            def identity(self):
+                return ScriptedSimulator().identity
+
+            def run(self, request, workspace):
+                return SimulationResult.create(
+                    status=SimulationStatus.SUCCESS,
+                    request_digest="f" * 64,
+                    simulation_key="f" * 64,
+                )
+
+        state, baseline, history_text, start_date = read_baseline_inputs(mini_case)
+        facade = SimulatorRuntime(
+            case=mini_case,
+            simulator=ForeignBindingSimulator(),
+            history_text=history_text,
+            history_start_date=start_date,
+            state=state,
+            baseline=baseline,
+        )
+        with pytest.raises(RuntimeExecutionBindingError, match="different request"):
+            facade.execute(candidate(), workspace_root=tmp_path / "ws", run_label="foreign")
