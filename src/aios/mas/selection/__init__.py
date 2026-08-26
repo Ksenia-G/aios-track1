@@ -24,8 +24,11 @@ from aios.mas.selection.models import (
     EligibilityRejection,
     GuardianOutcome,
     IneligibilityReason,
+    OutcomeLineageError,
     SimulationOutcome,
+    VerifiedChddInput,
     VerifiedExecution,
+    VerifiedRealizedState,
 )
 
 __all__ = [
@@ -40,6 +43,9 @@ __all__ = [
     "GuardianOutcome",
     "IneligibilityReason",
     "NoCommitEligibleCandidateError",
+    "OutcomeLineageError",
     "SimulationOutcome",
+    "VerifiedChddInput",
     "VerifiedExecution",
+    "VerifiedRealizedState",
 ]

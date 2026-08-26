@@ -109,17 +109,35 @@ class RealizedConstraintGuardian(Protocol):
     def evaluate(self, state_card: StateCard) -> ConstraintReport: ...
 
 
+@dataclass(frozen=True, slots=True)
+class ChddEvaluation:
+    """Экономический результат вместе с идентичностью входа, по которому он получен.
+
+    Один `ChddResult` границей не является: число описывает само себя, но не
+    говорит, из какой траектории оно получено, и настоящий результат другого
+    прогона выглядит здесь так же убедительно.
+    """
+
+    input_digest: str
+    result: ChddResult
+
+    def __post_init__(self) -> None:
+        if not self.input_digest:
+            raise BoundaryError("chdd_evaluation.input_digest: must be non-empty")
+
+
 @runtime_checkable
 class CHDD(Protocol):
     """Авторитетная экономика по кандидату и его физическому прогону.
 
-    Возвращается существующий `aios.chdd.ChddResult`, а не параллельный тип:
-    экономический отбор ниже по конвейеру ранжирует именно его NPV.
+    Возвращается существующий `aios.chdd.ChddResult` вместе с идентичностью
+    входа: экономический отбор ниже по конвейеру ранжирует именно его NPV и
+    обязан знать, по какой траектории он посчитан.
     """
 
     def evaluate(
         self, candidate: MagnitudeCandidate, execution: RuntimeExecution
-    ) -> ChddResult: ...
+    ) -> ChddEvaluation: ...
 
 
 @runtime_checkable
@@ -217,6 +235,7 @@ __all__ = [
     "ArbiterLike",
     "BoundaryError",
     "CandidateExecutor",
+    "ChddEvaluation",
     "GuardianVerdict",
     "IdentityPredictiveSafetyScreen",
     "PredictiveSafetyScreen",

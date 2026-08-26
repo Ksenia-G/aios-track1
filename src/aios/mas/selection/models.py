@@ -34,6 +34,10 @@ from aios.mas.common import CandidateKind
 from aios.mas.magnitude import MagnitudeCandidate
 
 
+class OutcomeLineageError(ValueError):
+    """An authoritative outcome does not belong to the input it claims."""
+
+
 @dataclass(frozen=True, slots=True)
 class VerifiedExecution:
     """Lineage root of one run whose identity has already been verified.
@@ -68,6 +72,62 @@ def _require_text(value: str, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{where}: expected non-empty string")
     return value
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedRealizedState:
+    """The realized state of one verified run, and the run it came from.
+
+    Guardian judges a StateCard. Knowing which run produced that card is what
+    keeps a real verdict about one candidate from being presented as a verdict
+    about another.
+    """
+
+    execution: VerifiedExecution
+    state_card_digest: str
+
+    def __post_init__(self) -> None:
+        _require_text(self.state_card_digest, "verified_realized_state.state_card_digest")
+
+    @classmethod
+    def of(cls, execution: VerifiedExecution, state_card: object) -> VerifiedRealizedState:
+        """Derive the binding from the actual card, never from a label."""
+        digest_value = state_card.digest()  # type: ignore[attr-defined]
+        return cls(execution=execution, state_card_digest=digest_value)
+
+    def to_json(self) -> dict[str, JsonValue]:
+        return {
+            "execution": self.execution.to_json(),
+            "state_card_digest": self.state_card_digest,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedChddInput:
+    """The economic input of one verified run, and the run it came from.
+
+    CHDD is computed over a trajectory, not over a StateCard, so the trajectory
+    is what has to be identified: a StateCard digest would not prove which
+    economic input the number came from.
+    """
+
+    execution: VerifiedExecution
+    input_digest: str
+
+    def __post_init__(self) -> None:
+        _require_text(self.input_digest, "verified_chdd_input.input_digest")
+
+    @classmethod
+    def of(cls, execution: VerifiedExecution, chdd_input: object) -> VerifiedChddInput:
+        """Derive the binding from the actual input, never from a label."""
+        digest_value = chdd_input.digest()  # type: ignore[attr-defined]
+        return cls(execution=execution, input_digest=digest_value)
+
+    def to_json(self) -> dict[str, JsonValue]:
+        return {
+            "execution": self.execution.to_json(),
+            "input_digest": self.input_digest,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,19 +166,35 @@ class GuardianOutcome:
     simulation_result_digest: str
     report: ConstraintReport
     execution: VerifiedExecution | None = None
+    state_card_digest: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.candidate_identity, "guardian_outcome.candidate_identity")
         _require_text(self.simulation_result_digest, "guardian_outcome.simulation_result_digest")
 
     @classmethod
-    def verified(cls, execution: VerifiedExecution, report: ConstraintReport) -> GuardianOutcome:
-        """Build from a validated run; both identity fields are derived."""
+    def verified(cls, realized: VerifiedRealizedState, report: ConstraintReport) -> GuardianOutcome:
+        """Build from the realized state this verdict was actually computed on.
+
+        The report has to name that state itself. Supplying a run root beside
+        an unrelated report used to be enough; it no longer is, because a real
+        verdict about another candidate names another card.
+        """
+        if report.state_card_digest is None:
+            raise OutcomeLineageError(
+                "guardian report carries no state_card_digest and cannot be authoritative"
+            )
+        if report.state_card_digest != realized.state_card_digest:
+            raise OutcomeLineageError(
+                "guardian report was computed on state "
+                f"{report.state_card_digest!r}, not on {realized.state_card_digest!r}"
+            )
         return cls(
-            candidate_identity=execution.candidate_digest,
-            simulation_result_digest=execution.result_digest,
+            candidate_identity=realized.execution.candidate_digest,
+            simulation_result_digest=realized.execution.result_digest,
             report=report,
-            execution=execution,
+            execution=realized.execution,
+            state_card_digest=realized.state_card_digest,
         )
 
     @property
@@ -131,6 +207,7 @@ class GuardianOutcome:
             "simulation_result_digest": self.simulation_result_digest,
             "report": self.report.to_json(),
             "execution": None if self.execution is None else self.execution.to_json(),
+            "state_card_digest": self.state_card_digest,
         }
 
 
@@ -142,19 +219,30 @@ class ChddOutcome:
     simulation_result_digest: str
     result: ChddResult
     execution: VerifiedExecution | None = None
+    input_digest: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.candidate_identity, "chdd_outcome.candidate_identity")
         _require_text(self.simulation_result_digest, "chdd_outcome.simulation_result_digest")
 
     @classmethod
-    def verified(cls, execution: VerifiedExecution, result: ChddResult) -> ChddOutcome:
-        """Build from a validated run; both identity fields are derived."""
+    def verified(cls, chdd_input: VerifiedChddInput, result: ChddResult) -> ChddOutcome:
+        """Build from the economic input this number was actually computed on."""
+        if result.input_digest is None:
+            raise OutcomeLineageError(
+                "chdd result carries no input_digest and cannot be authoritative"
+            )
+        if result.input_digest != chdd_input.input_digest:
+            raise OutcomeLineageError(
+                "chdd result was computed on input "
+                f"{result.input_digest!r}, not on {chdd_input.input_digest!r}"
+            )
         return cls(
-            candidate_identity=execution.candidate_digest,
-            simulation_result_digest=execution.result_digest,
+            candidate_identity=chdd_input.execution.candidate_digest,
+            simulation_result_digest=chdd_input.execution.result_digest,
             result=result,
-            execution=execution,
+            execution=chdd_input.execution,
+            input_digest=chdd_input.input_digest,
         )
 
     def to_json(self) -> dict[str, JsonValue]:
@@ -163,6 +251,7 @@ class ChddOutcome:
             "simulation_result_digest": self.simulation_result_digest,
             "result": self.result.to_json(),
             "execution": None if self.execution is None else self.execution.to_json(),
+            "input_digest": self.input_digest,
         }
 
 

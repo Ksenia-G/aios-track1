@@ -7,7 +7,6 @@ import datetime
 import pytest
 
 from aios.agents.constraint_guardian import ConstraintGuardian
-from aios.chdd.runner import ChddResult
 from aios.mas.arbiter import ArbiterDecision, DecisionBundle
 from aios.mas.common import CandidateKind, DecisionRound, ProposalSource
 from aios.mas.evidence import EvidenceArtifact
@@ -370,10 +369,21 @@ def test_non_finite_economics_never_wins_selection(bad: float) -> None:
     poisoned = digests[0]
 
     class NonFiniteCHDD:
-        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> ChddResult:
-            if candidate.digest() == poisoned:
-                return chdd_result(bad)
-            return chdd_result(0.9)
+        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> object:
+            from aios.evaluation.canonical import digest as _digest
+            from aios.mas.orchestration.boundaries import ChddEvaluation
+
+            input_digest = _digest(
+                {
+                    "run": execution.provenance.candidate_digest,
+                    "result": execution.result.result_digest,
+                }
+            )
+            value = bad if candidate.digest() == poisoned else 0.9
+            return ChddEvaluation(
+                input_digest=input_digest,
+                result=chdd_result(value, input_digest=input_digest),
+            )
 
     orchestrator = _orchestrator(magnitude_resolver=resolver, chdd=NonFiniteCHDD())
     result = orchestrator.run_decision_step(_step_input())
@@ -407,7 +417,7 @@ def test_selection_is_the_economic_argmax_with_deterministic_tie_break() -> None
 
 def test_chdd_failure_is_a_closed_failure() -> None:
     class ExplodingCHDD:
-        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> ChddResult:
+        def evaluate(self, candidate: MagnitudeCandidate, execution: object) -> object:
             raise RuntimeError("economics backend down")
 
     orchestrator = _orchestrator(chdd=ExplodingCHDD())

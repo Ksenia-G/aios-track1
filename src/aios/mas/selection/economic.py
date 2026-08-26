@@ -147,6 +147,39 @@ class EconomicSelector:
                 f"outcomes come from different verified executions ({detail})",
             )
 
+        guardian = evaluation.guardian
+        if guardian is not None:
+            if guardian.state_card_digest is None:
+                return (
+                    IneligibilityReason.UNVERIFIED_EXECUTION,
+                    "guardian outcome is not bound to the realized state it judged",
+                )
+            if guardian.report.state_card_digest != guardian.state_card_digest:
+                return (
+                    IneligibilityReason.EXECUTION_LINEAGE_MISMATCH,
+                    (
+                        "guardian report was computed on state "
+                        f"{guardian.report.state_card_digest!r}, not on "
+                        f"{guardian.state_card_digest!r}"
+                    ),
+                )
+
+        chdd = evaluation.chdd
+        if chdd is not None:
+            if chdd.input_digest is None:
+                return (
+                    IneligibilityReason.UNVERIFIED_EXECUTION,
+                    "chdd outcome is not bound to the economic input it was computed on",
+                )
+            if chdd.result.input_digest != chdd.input_digest:
+                return (
+                    IneligibilityReason.EXECUTION_LINEAGE_MISMATCH,
+                    (
+                        "chdd result was computed on input "
+                        f"{chdd.result.input_digest!r}, not on {chdd.input_digest!r}"
+                    ),
+                )
+
         root = next(iter(roots.values()), None)
         if root is not None and root.candidate_digest != evaluation.candidate_identity:
             return (

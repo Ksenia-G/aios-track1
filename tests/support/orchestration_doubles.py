@@ -30,6 +30,7 @@ from aios.evaluation.simulation import (
 )
 from aios.execution import ExecutionMode, RuntimeExecution, RuntimeProvenance
 from aios.mas.magnitude import MagnitudeCandidate
+from aios.mas.orchestration.boundaries import ChddEvaluation
 from aios.state import StateCard, WellRole
 
 SIMULATOR_IDENTITY = SimulatorIdentity(
@@ -237,9 +238,15 @@ class DeterministicRealizedStateExtractor:
         return replace(state, wells=tuple(wells))
 
 
-def chdd_result(npv_mln_rub: float, *, provenance: str = "tests.support") -> ChddResult:
+def chdd_result(
+    npv_mln_rub: float,
+    *,
+    provenance: str = "tests.support",
+    input_digest: str | None = None,
+) -> ChddResult:
     """Minimal well-formed ChddResult carrying a given NPV."""
     return ChddResult(
+        input_digest=input_digest,
         calculator_version="tests.support.orchestration_doubles/1.0.0",
         provenance=provenance,
         npv_mln_rub=npv_mln_rub,
@@ -274,11 +281,20 @@ class DeterministicCHDD:
     A hash-derived pseudo-value looks like an economic ranking and is not one.
     """
 
-    def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
+    def evaluate(
+        self, candidate: MagnitudeCandidate, execution: RuntimeExecution
+    ) -> ChddEvaluation:
         canonical = candidate.canonical()
         produced = sum(control.liquid_rate or 0.0 for control in canonical.producers)
         injected = sum(control.surface_rate or 0.0 for control in canonical.injectors)
-        return chdd_result(produced - 0.25 * injected)
+        # A stand-in for the economic trajectory of this exact run.
+        input_digest = digest(
+            {"run": execution.provenance.candidate_digest, "result": execution.result.result_digest}
+        )
+        return ChddEvaluation(
+            input_digest=input_digest,
+            result=chdd_result(produced - 0.25 * injected, input_digest=input_digest),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,8 +303,18 @@ class ScriptedCHDD:
 
     values: dict[str, float]
 
-    def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
-        return chdd_result(self.values[candidate.canonical().digest()])
+    def evaluate(
+        self, candidate: MagnitudeCandidate, execution: RuntimeExecution
+    ) -> ChddEvaluation:
+        input_digest = digest(
+            {"run": execution.provenance.candidate_digest, "result": execution.result.result_digest}
+        )
+        return ChddEvaluation(
+            input_digest=input_digest,
+            result=chdd_result(
+                self.values[candidate.canonical().digest()], input_digest=input_digest
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

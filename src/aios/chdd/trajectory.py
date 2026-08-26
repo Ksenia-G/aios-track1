@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from aios.cases.contract import Case
+from aios.evaluation.canonical import digest as canonical_digest
 from aios.opm.summary import SummaryData
 
 CHDD_COLUMNS = (
@@ -94,6 +95,20 @@ class ChddInput:
     headers: tuple[str, ...]
     rows: tuple[tuple[str, ...], ...]
     stats: TrajectoryStats
+
+    def digest(self) -> str:
+        """Идентичность самого входа: заголовки, строки, свойства.
+
+        Экономика считается по этой траектории и ни по какой другой, поэтому
+        результат обязан уметь назвать вход, из которого он получен.
+        """
+        return canonical_digest(
+            {
+                "headers": list(self.headers),
+                "rows": [list(row) for row in self.rows],
+                "stats": self.stats.to_json(),
+            }
+        )
 
 
 def build_chdd_input(summary: SummaryData, case: Case) -> ChddInput:

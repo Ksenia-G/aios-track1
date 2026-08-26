@@ -78,6 +78,18 @@ class ConstraintReport:
     violations: tuple[ConstraintCheck, ...]
     near_binding: tuple[ConstraintCheck, ...]
 
+    @property
+    def state_card_digest(self) -> str | None:
+        """Digest of the StateCard this verdict was actually computed from.
+
+        The guardian has always recorded it; exposing it lets a consumer check
+        that a report belongs to the state it is being used to judge, instead
+        of trusting the label of whoever passed it along. A report without it
+        is not authoritative.
+        """
+        value = self.metadata.get("state_card_digest")
+        return value or None
+
     def to_json(self) -> dict[str, JsonValue]:
         return {
             "metadata": dict(self.metadata),

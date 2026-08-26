@@ -30,10 +30,11 @@ from datetime import date
 from pathlib import Path
 
 from aios.cases.contract import Case
-from aios.chdd.runner import ChddResult, run_chdd
+from aios.chdd.runner import run_chdd
 from aios.chdd.trajectory import build_chdd_input, write_chdd_csv
 from aios.execution import ExecutionMode, RuntimeExecution, SimulatorRuntime
 from aios.mas.magnitude import MagnitudeCandidate
+from aios.mas.orchestration.boundaries import ChddEvaluation
 from aios.opm.summary import SummaryData, read_summary
 from aios.opm.workspace import OUTPUT_DIRNAME
 from aios.schedule.events import Schedule
@@ -135,12 +136,20 @@ class OpmChdd:
     case: Case
     locator: OpmRunLocator
 
-    def evaluate(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> ChddResult:
+    def evaluate(
+        self, candidate: MagnitudeCandidate, execution: RuntimeExecution
+    ) -> ChddEvaluation:
+        # Вход строится из артефактов ИМЕННО этого прогона, поэтому его
+        # идентичность и есть доказательство того, по какой траектории
+        # посчитана экономика.
         run_label = execution.provenance.candidate_digest
         summary = self.locator.read_summary(run_label, self.case.history.data_path.stem)
         chdd_input = build_chdd_input(summary, self.case)
         source = write_chdd_csv(chdd_input, self.locator.output_dir(run_label) / "chdd_input.csv")
-        return run_chdd(self.case, chdd_input, source_file=source)
+        return ChddEvaluation(
+            input_digest=chdd_input.digest(),
+            result=run_chdd(self.case, chdd_input, source_file=source),
+        )
 
 
 @dataclass(frozen=True, slots=True)

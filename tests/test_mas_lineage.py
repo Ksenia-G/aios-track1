@@ -35,8 +35,11 @@ from aios.mas.selection import (
     GuardianOutcome,
     IneligibilityReason,
     NoCommitEligibleCandidateError,
+    OutcomeLineageError,
     SimulationOutcome,
+    VerifiedChddInput,
     VerifiedExecution,
+    VerifiedRealizedState,
 )
 from aios.schedule import InjectorControl, ProducerControl, WellStatus
 from tests.support.orchestration_doubles import (
@@ -191,8 +194,8 @@ def test_r9_failed_run_with_valid_lineage_is_never_economically_eligible() -> No
     evaluation = CandidateEvaluation(
         candidate=A,
         simulation=SimulationOutcome.verified(verified, crashed),
-        guardian=GuardianOutcome.verified(verified, _report()),
-        chdd=ChddOutcome.verified(verified, chdd_result(9.0)),
+        guardian=GuardianOutcome.verified(_realized(verified), _report()),
+        chdd=ChddOutcome.verified(_chdd_input(verified), chdd_result(9.0, input_digest="chdd-A")),
     )
     with pytest.raises(NoCommitEligibleCandidateError):
         EconomicSelector().select([evaluation])
@@ -203,7 +206,7 @@ def test_r9_failed_run_with_valid_lineage_is_never_economically_eligible() -> No
 # ---------------------------------------------------------------------------
 
 
-def _report(*, failed: int = 0) -> ConstraintReport:
+def _report(*, failed: int = 0, state_card_digest: str = "state-A") -> ConstraintReport:
     total = max(failed, 1)
     checks = tuple(
         ConstraintCheck(
@@ -220,7 +223,7 @@ def _report(*, failed: int = 0) -> ConstraintReport:
     )
     violations = tuple(check for check in checks if check.status == "FAIL")
     return ConstraintReport(
-        metadata={"state_card_digest": "sc", "evaluation_version": "test/1.0.0"},
+        metadata={"state_card_digest": state_card_digest, "evaluation_version": "test/1.0.0"},
         official_checks=checks,
         summary=ConstraintSummary(
             total_checks=len(checks),
@@ -237,6 +240,14 @@ def _verified(candidate: MagnitudeCandidate) -> VerifiedExecution:
     return _require_execution_identity(candidate, _execution(candidate))
 
 
+def _realized(execution: VerifiedExecution, *, state: str = "state-A") -> VerifiedRealizedState:
+    return VerifiedRealizedState(execution=execution, state_card_digest=state)
+
+
+def _chdd_input(execution: VerifiedExecution, *, chdd: str = "chdd-A") -> VerifiedChddInput:
+    return VerifiedChddInput(execution=execution, input_digest=chdd)
+
+
 def _reason(result_or_error, identity: str) -> str:
     return next(
         str(rejection.reason)
@@ -250,8 +261,8 @@ def test_g1_matching_guardian_lineage_is_eligible() -> None:
     evaluation = CandidateEvaluation(
         candidate=A,
         simulation=SimulationOutcome.verified(root, _bound_result(A)),
-        guardian=GuardianOutcome.verified(root, _report()),
-        chdd=ChddOutcome.verified(root, chdd_result(5.0)),
+        guardian=GuardianOutcome.verified(_realized(root), _report()),
+        chdd=ChddOutcome.verified(_chdd_input(root), chdd_result(5.0, input_digest="chdd-A")),
     )
     assert (
         EconomicSelector().select([evaluation]).selected.candidate_identity == root.candidate_digest
@@ -265,8 +276,14 @@ def test_g2_c2_outcome_from_another_run_is_ineligible(swapped: str) -> None:
     evaluation = CandidateEvaluation(
         candidate=A,
         simulation=SimulationOutcome.verified(root_a, _bound_result(A)),
-        guardian=GuardianOutcome.verified(root_b if swapped == "guardian" else root_a, _report()),
-        chdd=ChddOutcome.verified(root_b if swapped == "chdd" else root_a, chdd_result(5.0)),
+        guardian=GuardianOutcome.verified(
+            _realized(root_b, state="state-B") if swapped == "guardian" else _realized(root_a),
+            _report(state_card_digest="state-B" if swapped == "guardian" else "state-A"),
+        ),
+        chdd=ChddOutcome.verified(
+            _chdd_input(root_b, chdd="chdd-B") if swapped == "chdd" else _chdd_input(root_a),
+            chdd_result(5.0, input_digest="chdd-B" if swapped == "chdd" else "chdd-A"),
+        ),
     )
     with pytest.raises(NoCommitEligibleCandidateError):
         EconomicSelector().select([evaluation])
@@ -285,7 +302,7 @@ def test_g3_relabelled_outcome_cannot_pass_as_ours() -> None:
         candidate=A,
         simulation=SimulationOutcome.verified(root_a, _bound_result(A)),
         guardian=relabelled,
-        chdd=ChddOutcome.verified(root_a, chdd_result(5.0)),
+        chdd=ChddOutcome.verified(_chdd_input(root_a), chdd_result(5.0, input_digest="chdd-A")),
     )
     with pytest.raises(NoCommitEligibleCandidateError):
         EconomicSelector().select([evaluation])
@@ -298,8 +315,8 @@ def test_g4_g5_c3_c4_any_root_field_divergence_is_ineligible(field: str) -> None
     evaluation = CandidateEvaluation(
         candidate=A,
         simulation=SimulationOutcome.verified(root, _bound_result(A)),
-        guardian=GuardianOutcome.verified(drifted, _report()),
-        chdd=ChddOutcome.verified(root, chdd_result(5.0)),
+        guardian=GuardianOutcome.verified(_realized(drifted), _report()),
+        chdd=ChddOutcome.verified(_chdd_input(root), chdd_result(5.0, input_digest="chdd-A")),
     )
     with pytest.raises(NoCommitEligibleCandidateError):
         EconomicSelector().select([evaluation])
@@ -315,7 +332,7 @@ def test_outcome_without_a_verified_root_is_ineligible() -> None:
             simulation_result_digest=root.result_digest,
             report=_report(),
         ),
-        chdd=ChddOutcome.verified(root, chdd_result(5.0)),
+        chdd=ChddOutcome.verified(_chdd_input(root), chdd_result(5.0, input_digest="chdd-A")),
     )
     with pytest.raises(NoCommitEligibleCandidateError):
         EconomicSelector().select([evaluation])
@@ -331,8 +348,8 @@ def _eligible(candidate: MagnitudeCandidate, npv: float) -> CandidateEvaluation:
     return CandidateEvaluation(
         candidate=candidate,
         simulation=SimulationOutcome.verified(root, _bound_result(candidate)),
-        guardian=GuardianOutcome.verified(root, _report()),
-        chdd=ChddOutcome.verified(root, chdd_result(npv)),
+        guardian=GuardianOutcome.verified(_realized(root), _report()),
+        chdd=ChddOutcome.verified(_chdd_input(root), chdd_result(npv, input_digest="chdd-A")),
     )
 
 
@@ -381,10 +398,184 @@ def test_lineage_rejections_are_reported_with_a_typed_reason() -> None:
     mismatched = CandidateEvaluation(
         candidate=A,
         simulation=SimulationOutcome.verified(root_a, _bound_result(A)),
-        guardian=GuardianOutcome.verified(root_b, _report()),
-        chdd=ChddOutcome.verified(root_a, chdd_result(5.0)),
+        guardian=GuardianOutcome.verified(
+            _realized(root_b, state="state-B"), _report(state_card_digest="state-B")
+        ),
+        chdd=ChddOutcome.verified(_chdd_input(root_a), chdd_result(5.0, input_digest="chdd-A")),
     )
     result = EconomicSelector().select([mismatched, _eligible(B, 3.0)])
+    assert _reason(result, A.canonical().digest()) == str(
+        IneligibilityReason.EXECUTION_LINEAGE_MISMATCH
+    )
+
+
+# ---------------------------------------------------------------------------
+# Payload lineage: a real verdict about one run cannot be worn by another.
+#
+# The execution root alone never proved this. A ConstraintReport genuinely
+# produced by the Guardian for candidate B, or a ChddResult genuinely computed
+# from B's trajectory, could be wrapped beside A's root and every field of the
+# wrapper agreed with itself. What settles it is the input each payload names.
+# ---------------------------------------------------------------------------
+
+
+def _real_report(card) -> ConstraintReport:
+    from aios.agents.constraint_guardian import ConstraintGuardian
+
+    return ConstraintGuardian().evaluate(card)
+
+
+def _cards() -> tuple[object, object]:
+    """Two genuinely different realized StateCards."""
+    from tests.support.mas_team_fixtures import synthetic_state_card
+
+    card_a = synthetic_state_card()
+    card_b = dataclasses.replace(
+        card_a,
+        wells=tuple(
+            dataclasses.replace(well, wlpr=(well.wlpr or 0.0) + 7.0) for well in card_a.wells
+        ),
+    )
+    return card_a, card_b
+
+
+def test_guardian_g1_report_for_the_state_we_judged_is_accepted() -> None:
+    card_a, _ = _cards()
+    root = _verified(A)
+    outcome = GuardianOutcome.verified(VerifiedRealizedState.of(root, card_a), _real_report(card_a))
+    assert outcome.state_card_digest == card_a.digest()
+
+
+def test_guardian_g2_real_report_from_another_run_is_refused() -> None:
+    """The exploit: Guardian(B)'s genuine verdict presented for A."""
+    card_a, card_b = _cards()
+    root = _verified(A)
+    with pytest.raises(OutcomeLineageError, match="computed on state"):
+        GuardianOutcome.verified(VerifiedRealizedState.of(root, card_a), _real_report(card_b))
+
+
+def test_guardian_g3_different_realized_state_digest_is_refused() -> None:
+    card_a, card_b = _cards()
+    root = _verified(A)
+    with pytest.raises(OutcomeLineageError, match="computed on state"):
+        GuardianOutcome.verified(VerifiedRealizedState.of(root, card_b), _real_report(card_a))
+
+
+def test_guardian_g4_report_without_state_identity_cannot_be_authoritative() -> None:
+    root = _verified(A)
+    unbound = dataclasses.replace(_report(), metadata={"evaluation_version": "test/1.0.0"})
+    assert unbound.state_card_digest is None
+    with pytest.raises(OutcomeLineageError, match="no state_card_digest"):
+        GuardianOutcome.verified(_realized(root), unbound)
+
+
+def test_guardian_g5_same_card_but_another_execution_root_is_ineligible() -> None:
+    card_a, _ = _cards()
+    root_a, root_b = _verified(A), _verified(B)
+    evaluation = CandidateEvaluation(
+        candidate=A,
+        simulation=SimulationOutcome.verified(root_a, _bound_result(A)),
+        guardian=GuardianOutcome.verified(
+            VerifiedRealizedState.of(root_b, card_a), _real_report(card_a)
+        ),
+        chdd=ChddOutcome.verified(_chdd_input(root_a), chdd_result(5.0, input_digest="chdd-A")),
+    )
+    with pytest.raises(NoCommitEligibleCandidateError):
+        EconomicSelector().select([evaluation])
+
+
+def test_chdd_c1_result_for_the_input_we_evaluated_is_accepted() -> None:
+    root = _verified(A)
+    outcome = ChddOutcome.verified(
+        VerifiedChddInput(execution=root, input_digest="chdd-A"),
+        chdd_result(5.0, input_digest="chdd-A"),
+    )
+    assert outcome.input_digest == "chdd-A"
+
+
+def test_chdd_c2_real_result_from_another_input_is_refused() -> None:
+    """The exploit: a genuine ChddResult computed from B's trajectory."""
+    root = _verified(A)
+    with pytest.raises(OutcomeLineageError, match="computed on input"):
+        ChddOutcome.verified(
+            VerifiedChddInput(execution=root, input_digest="chdd-A"),
+            chdd_result(999.0, input_digest="chdd-B"),
+        )
+
+
+def test_chdd_c4_wrong_input_digest_is_refused() -> None:
+    root = _verified(A)
+    with pytest.raises(OutcomeLineageError, match="computed on input"):
+        ChddOutcome.verified(
+            VerifiedChddInput(execution=root, input_digest="chdd-B"),
+            chdd_result(5.0, input_digest="chdd-A"),
+        )
+
+
+def test_chdd_c5_result_without_input_identity_cannot_be_authoritative() -> None:
+    root = _verified(A)
+    assert chdd_result(5.0).input_digest is None
+    with pytest.raises(OutcomeLineageError, match="no input_digest"):
+        ChddOutcome.verified(
+            VerifiedChddInput(execution=root, input_digest="chdd-A"), chdd_result(5.0)
+        )
+
+
+def test_chdd_c3_same_candidate_different_request_is_ineligible() -> None:
+    root_a, root_b = _verified(A), _verified(B)
+    drifted = dataclasses.replace(root_a, request_digest=root_b.request_digest)
+    evaluation = CandidateEvaluation(
+        candidate=A,
+        simulation=SimulationOutcome.verified(root_a, _bound_result(A)),
+        guardian=GuardianOutcome.verified(_realized(root_a), _report()),
+        chdd=ChddOutcome.verified(
+            VerifiedChddInput(execution=drifted, input_digest="chdd-A"),
+            chdd_result(5.0, input_digest="chdd-A"),
+        ),
+    )
+    with pytest.raises(NoCommitEligibleCandidateError):
+        EconomicSelector().select([evaluation])
+
+
+def test_selector_refuses_a_guardian_outcome_whose_payload_drifted() -> None:
+    """Even hand-built wrappers cannot desync payload from binding."""
+    card_a, card_b = _cards()
+    root = _verified(A)
+    smuggled = GuardianOutcome(
+        candidate_identity=root.candidate_digest,
+        simulation_result_digest=root.result_digest,
+        report=_real_report(card_b),
+        execution=root,
+        state_card_digest=card_a.digest(),
+    )
+    evaluation = CandidateEvaluation(
+        candidate=A,
+        simulation=SimulationOutcome.verified(root, _bound_result(A)),
+        guardian=smuggled,
+        chdd=ChddOutcome.verified(_chdd_input(root), chdd_result(5.0, input_digest="chdd-A")),
+    )
+    result = EconomicSelector().select([evaluation, _eligible(B, 1.0)])
+    assert _reason(result, A.canonical().digest()) == str(
+        IneligibilityReason.EXECUTION_LINEAGE_MISMATCH
+    )
+
+
+def test_selector_refuses_a_chdd_outcome_whose_payload_drifted() -> None:
+    root = _verified(A)
+    smuggled = ChddOutcome(
+        candidate_identity=root.candidate_digest,
+        simulation_result_digest=root.result_digest,
+        result=chdd_result(999.0, input_digest="chdd-B"),
+        execution=root,
+        input_digest="chdd-A",
+    )
+    evaluation = CandidateEvaluation(
+        candidate=A,
+        simulation=SimulationOutcome.verified(root, _bound_result(A)),
+        guardian=GuardianOutcome.verified(_realized(root), _report()),
+        chdd=smuggled,
+    )
+    result = EconomicSelector().select([evaluation, _eligible(B, 1.0)])
     assert _reason(result, A.canonical().digest()) == str(
         IneligibilityReason.EXECUTION_LINEAGE_MISMATCH
     )

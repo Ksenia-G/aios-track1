@@ -25,7 +25,9 @@ from aios.mas.selection import (
     EconomicSelector,
     GuardianOutcome,
     SimulationOutcome,
+    VerifiedChddInput,
     VerifiedExecution,
+    VerifiedRealizedState,
 )
 
 SEL_SRC_DIR = Path(__file__).resolve().parents[1] / "src" / "aios" / "mas" / "selection"
@@ -216,14 +218,17 @@ def _evaluation(kind: CandidateKind, bundle_digest: str, npv: float) -> Candidat
         simulation_key=sim_result.simulation_key or "",
         result_digest=sim_result.result_digest,
     )
+    state_digest = f"state-{bundle_digest}"
+    chdd_input_digest = f"chdd-input-{bundle_digest}"
     guardian_report = ConstraintReport(
-        metadata={"state_card_digest": "sc", "evaluation_version": "test/1.0.0"},
+        metadata={"state_card_digest": state_digest, "evaluation_version": "test/1.0.0"},
         official_checks=(),
         summary=ConstraintSummary(total_checks=0, passed=0, failed=0, near_binding=0),
         violations=(),
         near_binding=(),
     )
     chdd_result = ChddResult(
+        input_digest=chdd_input_digest,
         calculator_version="test-chdd/1.0.0",
         provenance="OFFICIAL",
         npv_mln_rub=npv,
@@ -262,8 +267,14 @@ def _evaluation(kind: CandidateKind, bundle_digest: str, npv: float) -> Candidat
     return CandidateEvaluation(
         candidate=candidate,
         simulation=SimulationOutcome.verified(root, sim_result),
-        guardian=GuardianOutcome.verified(root, guardian_report),
-        chdd=ChddOutcome.verified(root, chdd_result),
+        guardian=GuardianOutcome.verified(
+            VerifiedRealizedState(execution=root, state_card_digest=state_digest),
+            guardian_report,
+        ),
+        chdd=ChddOutcome.verified(
+            VerifiedChddInput(execution=root, input_digest=chdd_input_digest),
+            chdd_result,
+        ),
     )
 
 

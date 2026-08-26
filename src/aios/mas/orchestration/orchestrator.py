@@ -87,7 +87,9 @@ from aios.mas.selection import (
     EconomicSelector,
     GuardianOutcome,
     SimulationOutcome,
+    VerifiedChddInput,
     VerifiedExecution,
+    VerifiedRealizedState,
 )
 from aios.state import StateCard
 
@@ -827,12 +829,18 @@ class ClosedLoopOrchestrator:
             # полными прогонами, но им не является.
             if execution.result.supports_objective_evaluation:
                 realized = self._realized_state_extractor.extract(candidate, execution)
+                # Guardian судит именно это состояние, и его вердикт с ним же
+                # и связывается: настоящий вердикт о другом кандидате назовёт
+                # другую карту и сюда не пройдёт.
+                realized_root = VerifiedRealizedState.of(verified, realized)
                 report = self._guardian.evaluate(realized)
-                guardian_outcome = GuardianOutcome.verified(verified, report)
+                guardian_outcome = GuardianOutcome.verified(realized_root, report)
                 guardian_verdicts[candidate_digest] = GuardianVerdict.from_report(report)
                 if report.summary.failed == 0:
+                    evaluation = self._chdd.evaluate(candidate, execution)
                     chdd_outcome = ChddOutcome.verified(
-                        verified, self._chdd.evaluate(candidate, execution)
+                        VerifiedChddInput(execution=verified, input_digest=evaluation.input_digest),
+                        evaluation.result,
                     )
             else:
                 guardian_verdicts[candidate_digest] = GuardianVerdict(

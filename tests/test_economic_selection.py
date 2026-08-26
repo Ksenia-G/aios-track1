@@ -65,7 +65,7 @@ def _verified(candidate: MagnitudeCandidate, result: SimulationResult) -> Verifi
     )
 
 
-def _guardian_report(*, failed: int = 0) -> ConstraintReport:
+def _guardian_report(*, failed: int = 0, state_card_digest: str = "sc-digest") -> ConstraintReport:
     total = max(failed, 1)
     checks = tuple(
         ConstraintCheck(
@@ -82,7 +82,7 @@ def _guardian_report(*, failed: int = 0) -> ConstraintReport:
     )
     violations = tuple(check for check in checks if check.status == "FAIL")
     return ConstraintReport(
-        metadata={"state_card_digest": "sc-digest", "evaluation_version": "test/1.0.0"},
+        metadata={"state_card_digest": state_card_digest, "evaluation_version": "test/1.0.0"},
         official_checks=checks,
         summary=ConstraintSummary(
             total_checks=len(checks),
@@ -95,8 +95,9 @@ def _guardian_report(*, failed: int = 0) -> ConstraintReport:
     )
 
 
-def _chdd_result(*, npv: float = 100.0) -> ChddResult:
+def _chdd_result(*, npv: float = 100.0, input_digest: str = "chdd-input") -> ChddResult:
     return ChddResult(
+        input_digest=input_digest,
         calculator_version="test-chdd/1.0.0",
         provenance="OFFICIAL",
         npv_mln_rub=npv,
@@ -154,6 +155,8 @@ def _evaluation(
     identity = candidate.digest()
     sim_result = _simulation_result(status=simulation_status, suffix=bundle_digest)
     root = _verified(candidate, sim_result)
+    state_digest = f"state-{bundle_digest}"
+    chdd_input_digest = f"chdd-input-{bundle_digest}"
 
     simulation = None
     if include_simulation:
@@ -168,8 +171,9 @@ def _evaluation(
         guardian = GuardianOutcome(
             candidate_identity=override_guardian_identity or identity,
             simulation_result_digest=override_guardian_sim_digest or sim_result.result_digest,
-            report=_guardian_report(failed=guardian_failed),
+            report=_guardian_report(failed=guardian_failed, state_card_digest=state_digest),
             execution=root,
+            state_card_digest=state_digest,
         )
 
     chdd = None
@@ -177,8 +181,9 @@ def _evaluation(
         chdd = ChddOutcome(
             candidate_identity=override_chdd_identity or identity,
             simulation_result_digest=override_chdd_sim_digest or sim_result.result_digest,
-            result=_chdd_result(npv=npv),
+            result=_chdd_result(npv=npv, input_digest=chdd_input_digest),
             execution=root,
+            input_digest=chdd_input_digest,
         )
 
     return CandidateEvaluation(

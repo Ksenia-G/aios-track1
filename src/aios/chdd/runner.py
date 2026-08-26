@@ -184,9 +184,17 @@ class ChddResult:
     ignored_blank_wells: int
     warnings: tuple[str, ...]
     raw: Mapping[str, Any]
+    input_digest: str | None = None
+    """Идентичность входа, по которому посчитан этот результат.
+
+    Формулы и суммы от этого поля не зависят: оно отвечает только на вопрос
+    "из какой траектории получено это число". Экономически авторитетным
+    результат без него не считается.
+    """
 
     def to_json(self) -> dict[str, Any]:
         return {
+            "input_digest": self.input_digest,
             "calculator_version": self.calculator_version,
             "provenance": self.provenance,
             "npv_mln_rub": self.npv_mln_rub,
@@ -222,7 +230,9 @@ def _annual_money(entry: Mapping[str, Any], keys: tuple[str, ...], where: str) -
     return None
 
 
-def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
+def parse_chdd_result(
+    result: Any, *, provenance: str, input_digest: str | None = None
+) -> ChddResult:
     """Строго разобрать результат официального калькулятора.
 
     Каждое поле, от которого зависят заявленный NPV, экономическая
@@ -288,6 +298,7 @@ def parse_chdd_result(result: Any, *, provenance: str) -> ChddResult:
     warnings = _require_sequence(diagnostics, "warnings", "result.diagnostics")
 
     return ChddResult(
+        input_digest=input_digest,
         calculator_version=_require_text(result, "version", "result"),
         provenance=provenance,
         npv_mln_rub=_require_number(summary, "totalChddM", "result.summary"),
@@ -357,4 +368,10 @@ def run_chdd(case: Case, chdd_input: ChddInput, *, source_file: Path) -> ChddRes
         except Exception as exc:
             raise ChddError(f"official CHDD calculator failed: {exc}") from exc
 
-    return parse_chdd_result(result, provenance=case.economics.provenance)
+    # Происхождение проставляет авторитетный расчёт: результат называет вход,
+    # по которому он получен, и подменить траекторию после расчёта нельзя.
+    return parse_chdd_result(
+        result,
+        provenance=case.economics.provenance,
+        input_digest=chdd_input.digest(),
+    )
