@@ -7,12 +7,18 @@ None of the three authoritative result types this selector consumes --
 each other. Each was designed independently and none of them changes here
 (section 32/33 of the task: zero implementation diff expected).
 
-The `*Outcome` wrappers below exist only to make identity explicit: the
-caller (future Orchestrator) asserts which candidate and which simulation
-result an outcome belongs to, and `EconomicSelector` verifies that claim.
-This is deliberate -- identity is asserted and checked, never derived from
-list position (section 21) and never invented where the underlying
-contracts do not carry it (section 5).
+The `*Outcome` wrappers below make identity explicit, and `EconomicSelector`
+verifies it -- never derived from list position (section 21).
+
+An asserted label alone is not identity, though. A Guardian report computed
+for candidate B can be wrapped with candidate A's name and A's result digest,
+and nothing in the wrapper contradicts it. `VerifiedExecution` closes that:
+it is the four-part lineage root of one validated run, it can only be
+produced by code that actually checked a `RuntimeExecution` against its
+candidate, and an outcome carrying it cannot be re-pointed at another run
+without the mismatch becoming visible. Outcomes without it stay
+representable -- historical records and non-authoritative fixtures still
+exist -- but they can never become economically eligible.
 """
 
 from __future__ import annotations
@@ -28,6 +34,36 @@ from aios.mas.common import CandidateKind
 from aios.mas.magnitude import MagnitudeCandidate
 
 
+@dataclass(frozen=True, slots=True)
+class VerifiedExecution:
+    """Lineage root of one run whose identity has already been verified.
+
+    Every field is recomputed from the real objects by the code that
+    validates the execution; none of them is a caller-chosen label. Holding
+    an instance therefore means the check happened.
+    """
+
+    candidate_digest: str
+    request_digest: str
+    simulation_key: str
+    result_digest: str
+
+    def __post_init__(self) -> None:
+        for name in ("candidate_digest", "request_digest", "simulation_key", "result_digest"):
+            _require_text(getattr(self, name), f"verified_execution.{name}")
+
+    def to_json(self) -> dict[str, JsonValue]:
+        return {
+            "candidate_digest": self.candidate_digest,
+            "request_digest": self.request_digest,
+            "simulation_key": self.simulation_key,
+            "result_digest": self.result_digest,
+        }
+
+    def digest(self) -> str:
+        return digest(self.to_json())
+
+
 def _require_text(value: str, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{where}: expected non-empty string")
@@ -40,14 +76,25 @@ class SimulationOutcome:
 
     candidate_identity: str
     result: SimulationResult
+    execution: VerifiedExecution | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.candidate_identity, "simulation_outcome.candidate_identity")
+
+    @classmethod
+    def verified(cls, execution: VerifiedExecution, result: SimulationResult) -> SimulationOutcome:
+        """Build from a validated run; the label is derived, not supplied."""
+        return cls(
+            candidate_identity=execution.candidate_digest,
+            result=result,
+            execution=execution,
+        )
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
             "candidate_identity": self.candidate_identity,
             "result": self.result.to_json(),
+            "execution": None if self.execution is None else self.execution.to_json(),
         }
 
 
@@ -58,10 +105,21 @@ class GuardianOutcome:
     candidate_identity: str
     simulation_result_digest: str
     report: ConstraintReport
+    execution: VerifiedExecution | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.candidate_identity, "guardian_outcome.candidate_identity")
         _require_text(self.simulation_result_digest, "guardian_outcome.simulation_result_digest")
+
+    @classmethod
+    def verified(cls, execution: VerifiedExecution, report: ConstraintReport) -> GuardianOutcome:
+        """Build from a validated run; both identity fields are derived."""
+        return cls(
+            candidate_identity=execution.candidate_digest,
+            simulation_result_digest=execution.result_digest,
+            report=report,
+            execution=execution,
+        )
 
     @property
     def passed(self) -> bool:
@@ -72,6 +130,7 @@ class GuardianOutcome:
             "candidate_identity": self.candidate_identity,
             "simulation_result_digest": self.simulation_result_digest,
             "report": self.report.to_json(),
+            "execution": None if self.execution is None else self.execution.to_json(),
         }
 
 
@@ -82,16 +141,28 @@ class ChddOutcome:
     candidate_identity: str
     simulation_result_digest: str
     result: ChddResult
+    execution: VerifiedExecution | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.candidate_identity, "chdd_outcome.candidate_identity")
         _require_text(self.simulation_result_digest, "chdd_outcome.simulation_result_digest")
+
+    @classmethod
+    def verified(cls, execution: VerifiedExecution, result: ChddResult) -> ChddOutcome:
+        """Build from a validated run; both identity fields are derived."""
+        return cls(
+            candidate_identity=execution.candidate_digest,
+            simulation_result_digest=execution.result_digest,
+            result=result,
+            execution=execution,
+        )
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
             "candidate_identity": self.candidate_identity,
             "simulation_result_digest": self.simulation_result_digest,
             "result": self.result.to_json(),
+            "execution": None if self.execution is None else self.execution.to_json(),
         }
 
 
@@ -135,6 +206,8 @@ class IneligibilityReason(StrEnum):
     CHDD_MISSING = "CHDD_MISSING"
     CHDD_IDENTITY_MISMATCH = "CHDD_IDENTITY_MISMATCH"
     NON_FINITE_CHDD_VALUE = "NON_FINITE_CHDD_VALUE"
+    UNVERIFIED_EXECUTION = "UNVERIFIED_EXECUTION"
+    EXECUTION_LINEAGE_MISMATCH = "EXECUTION_LINEAGE_MISMATCH"
 
 
 @dataclass(frozen=True, slots=True)

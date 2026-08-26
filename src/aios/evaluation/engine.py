@@ -237,6 +237,8 @@ class EvaluationEngine:
                     message=f"{type(error).__name__}: {error}",
                     details={"stage": "artifact.ingest"},
                 ),
+                request_digest=result.request_digest,
+                simulation_key=result.simulation_key,
             )
         # Дайджест содержимого не меняется при переносе, меняется только путь,
         # поэтому result_digest остаётся валидным.
@@ -247,6 +249,10 @@ class EvaluationEngine:
             metadata=result.metadata,
             diagnostics=result.diagnostics,
             failure=result.failure,
+            # Происхождение переносится вместе с результатом: перенос артефакта
+            # в хранилище не меняет того, какой запрос его породил.
+            request_digest=result.request_digest,
+            simulation_key=result.simulation_key,
         )
 
     def _evaluate_npv(

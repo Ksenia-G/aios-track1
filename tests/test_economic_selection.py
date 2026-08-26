@@ -27,6 +27,7 @@ from aios.mas.selection import (
     IneligibilityReason,
     NoCommitEligibleCandidateError,
     SimulationOutcome,
+    VerifiedExecution,
 )
 
 _DATE = datetime.date(2020, 4, 1)
@@ -43,8 +44,25 @@ def _candidate(
     )
 
 
-def _simulation_result(*, status: SimulationStatus = SimulationStatus.SUCCESS) -> SimulationResult:
-    return SimulationResult.create(status=status)
+def _simulation_result(
+    *, status: SimulationStatus = SimulationStatus.SUCCESS, suffix: str = "a"
+) -> SimulationResult:
+    """A result carrying the request binding a real runtime would stamp on it."""
+    return SimulationResult.create(
+        status=status,
+        request_digest=f"request-digest-{suffix}",
+        simulation_key=f"simulation-key-{suffix}",
+    )
+
+
+def _verified(candidate: MagnitudeCandidate, result: SimulationResult) -> VerifiedExecution:
+    """The lineage root the orchestrator derives after validating a run."""
+    return VerifiedExecution(
+        candidate_digest=candidate.digest(),
+        request_digest=result.request_digest or "",
+        simulation_key=result.simulation_key or "",
+        result_digest=result.result_digest,
+    )
 
 
 def _guardian_report(*, failed: int = 0) -> ConstraintReport:
@@ -134,12 +152,15 @@ def _evaluation(
 ) -> CandidateEvaluation:
     candidate = _candidate(kind=kind, bundle_digest=bundle_digest)
     identity = candidate.digest()
-    sim_result = _simulation_result(status=simulation_status)
+    sim_result = _simulation_result(status=simulation_status, suffix=bundle_digest)
+    root = _verified(candidate, sim_result)
 
     simulation = None
     if include_simulation:
         simulation = SimulationOutcome(
-            candidate_identity=override_sim_identity or identity, result=sim_result
+            candidate_identity=override_sim_identity or identity,
+            result=sim_result,
+            execution=root,
         )
 
     guardian = None
@@ -148,6 +169,7 @@ def _evaluation(
             candidate_identity=override_guardian_identity or identity,
             simulation_result_digest=override_guardian_sim_digest or sim_result.result_digest,
             report=_guardian_report(failed=guardian_failed),
+            execution=root,
         )
 
     chdd = None
@@ -156,6 +178,7 @@ def _evaluation(
             candidate_identity=override_chdd_identity or identity,
             simulation_result_digest=override_chdd_sim_digest or sim_result.result_digest,
             result=_chdd_result(npv=npv),
+            execution=root,
         )
 
     return CandidateEvaluation(

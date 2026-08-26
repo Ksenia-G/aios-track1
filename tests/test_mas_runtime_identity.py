@@ -27,7 +27,11 @@ from aios.mas.orchestration.orchestrator import (
     _require_execution_identity,
 )
 from aios.schedule import InjectorControl, ProducerControl, WellStatus
-from tests.support.orchestration_doubles import build_provenance, build_request
+from tests.support.orchestration_doubles import (
+    build_provenance,
+    build_request,
+    request_binding,
+)
 
 
 def _candidate(bundle: str, *, rate: float) -> MagnitudeCandidate:
@@ -57,9 +61,11 @@ B = _candidate("B-bundle", rate=900.0)
 
 
 def _result(candidate: MagnitudeCandidate) -> SimulationResult:
+    """A result bound to the request that candidate's run would have used."""
     return SimulationResult.create(
         status=SimulationStatus.SUCCESS,
         metadata={"candidate_digest": candidate.canonical().digest()},
+        **request_binding(build_request(candidate)),
     )
 
 
@@ -236,8 +242,13 @@ def test_orchestrator_sources_every_outcome_identity_from_the_validated_run() ->
     from aios.mas.orchestration import orchestrator as module
 
     source = inspect.getsource(module.ClosedLoopOrchestrator._simulate_guard_and_commit)
-    assert "identity = execution.provenance.candidate_digest" in source
-    for outcome in ("SimulationOutcome(", "GuardianOutcome(", "ChddOutcome("):
-        assert outcome in source
-    # No outcome is built from a literal or a caller-supplied label.
-    assert "candidate_identity=identity" in source
+    # Every outcome is built from the verified root returned by the identity
+    # check, so there is no label for a caller to choose.
+    assert "verified = _require_execution_identity(candidate, execution)" in source
+    for factory in (
+        "SimulationOutcome.verified(",
+        "GuardianOutcome.verified(",
+        "ChddOutcome.verified(",
+    ):
+        assert factory in source
+    assert "candidate_identity=" not in source

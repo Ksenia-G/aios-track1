@@ -107,10 +107,82 @@ class EconomicSelector:
         return tuple(by_identity.values())
 
     @staticmethod
+    def _lineage_failure(
+        evaluation: CandidateEvaluation,
+    ) -> tuple[IneligibilityReason, str] | None:
+        """Every outcome must come from the same verified run.
+
+        Matching labels are not enough. A Guardian verdict computed for one
+        candidate can be wrapped with another candidate's name and result
+        digest, and every field of that wrapper agrees with itself. Only the
+        four-part execution root ties the verdict back to the run it was
+        actually computed from, so all three outcomes must carry it and it
+        must be the same root in each.
+        """
+        outcomes = (
+            ("simulation", evaluation.simulation),
+            ("guardian", evaluation.guardian),
+            ("chdd", evaluation.chdd),
+        )
+        present = [(name, outcome) for name, outcome in outcomes if outcome is not None]
+        unverified = [name for name, outcome in present if outcome.execution is None]
+        if unverified:
+            return (
+                IneligibilityReason.UNVERIFIED_EXECUTION,
+                (
+                    f"outcome(s) {sorted(unverified)} carry no verified execution identity; "
+                    "an asserted label cannot establish economic eligibility"
+                ),
+            )
+
+        roots = {name: outcome.execution for name, outcome in present}
+        distinct = {root.digest() for root in roots.values()}
+        if len(distinct) > 1:
+            detail = ", ".join(
+                f"{name}={root.candidate_digest[:12]}/{root.result_digest[:12]}"
+                for name, root in sorted(roots.items())
+            )
+            return (
+                IneligibilityReason.EXECUTION_LINEAGE_MISMATCH,
+                f"outcomes come from different verified executions ({detail})",
+            )
+
+        root = next(iter(roots.values()), None)
+        if root is not None and root.candidate_digest != evaluation.candidate_identity:
+            return (
+                IneligibilityReason.EXECUTION_LINEAGE_MISMATCH,
+                (
+                    f"verified execution belongs to candidate {root.candidate_digest!r}, "
+                    f"expected {evaluation.candidate_identity!r}"
+                ),
+            )
+        if root is not None and evaluation.simulation is not None:
+            result = evaluation.simulation.result
+            if not result.is_request_bound:
+                return (
+                    IneligibilityReason.UNVERIFIED_EXECUTION,
+                    "simulation result carries no request binding",
+                )
+            if (
+                result.request_digest != root.request_digest
+                or result.simulation_key != root.simulation_key
+                or result.result_digest != root.result_digest
+            ):
+                return (
+                    IneligibilityReason.EXECUTION_LINEAGE_MISMATCH,
+                    "simulation result does not match its verified execution root",
+                )
+        return None
+
+    @staticmethod
     def _ineligibility(
         evaluation: CandidateEvaluation,
     ) -> tuple[IneligibilityReason, str] | None:
         candidate_identity = evaluation.candidate_identity
+
+        lineage = EconomicSelector._lineage_failure(evaluation)
+        if lineage is not None:
+            return lineage
 
         simulation = evaluation.simulation
         if simulation is None:

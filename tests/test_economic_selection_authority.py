@@ -25,6 +25,7 @@ from aios.mas.selection import (
     EconomicSelector,
     GuardianOutcome,
     SimulationOutcome,
+    VerifiedExecution,
 )
 
 SEL_SRC_DIR = Path(__file__).resolve().parents[1] / "src" / "aios" / "mas" / "selection"
@@ -204,8 +205,17 @@ def _candidate(kind: CandidateKind, bundle_digest: str) -> MagnitudeCandidate:
 
 def _evaluation(kind: CandidateKind, bundle_digest: str, npv: float) -> CandidateEvaluation:
     candidate = _candidate(kind, bundle_digest)
-    identity = candidate.digest()
-    sim_result = SimulationResult.create(status=SimulationStatus.SUCCESS)
+    sim_result = SimulationResult.create(
+        status=SimulationStatus.SUCCESS,
+        request_digest=f"request-{bundle_digest}",
+        simulation_key=f"key-{bundle_digest}",
+    )
+    root = VerifiedExecution(
+        candidate_digest=candidate.digest(),
+        request_digest=sim_result.request_digest or "",
+        simulation_key=sim_result.simulation_key or "",
+        result_digest=sim_result.result_digest,
+    )
     guardian_report = ConstraintReport(
         metadata={"state_card_digest": "sc", "evaluation_version": "test/1.0.0"},
         official_checks=(),
@@ -251,17 +261,9 @@ def _evaluation(kind: CandidateKind, bundle_digest: str, npv: float) -> Candidat
     )
     return CandidateEvaluation(
         candidate=candidate,
-        simulation=SimulationOutcome(candidate_identity=identity, result=sim_result),
-        guardian=GuardianOutcome(
-            candidate_identity=identity,
-            simulation_result_digest=sim_result.result_digest,
-            report=guardian_report,
-        ),
-        chdd=ChddOutcome(
-            candidate_identity=identity,
-            simulation_result_digest=sim_result.result_digest,
-            result=chdd_result,
-        ),
+        simulation=SimulationOutcome.verified(root, sim_result),
+        guardian=GuardianOutcome.verified(root, guardian_report),
+        chdd=ChddOutcome.verified(root, chdd_result),
     )
 
 

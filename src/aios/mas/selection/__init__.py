@@ -25,6 +25,7 @@ from aios.mas.selection.models import (
     GuardianOutcome,
     IneligibilityReason,
     SimulationOutcome,
+    VerifiedExecution,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "IneligibilityReason",
     "NoCommitEligibleCandidateError",
     "SimulationOutcome",
+    "VerifiedExecution",
 ]

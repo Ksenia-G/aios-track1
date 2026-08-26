@@ -25,6 +25,7 @@ from aios.evaluation.simulation import (
     SimulationResult,
     SimulationStatus,
     SimulatorIdentity,
+    compute_request_digest,
     compute_simulation_key,
 )
 from aios.execution import ExecutionMode, RuntimeExecution, RuntimeProvenance
@@ -65,6 +66,14 @@ def build_request(candidate: MagnitudeCandidate) -> SimulationRequest:
         scenario_digest=canonical.bundle_digest,
         schedule_digest=schedule_digest_for(candidate_digest),
     )
+
+
+def request_binding(request: SimulationRequest) -> dict[str, str]:
+    """The request lineage a real runtime stamps onto every result it returns."""
+    return {
+        "request_digest": compute_request_digest(request),
+        "simulation_key": compute_simulation_key(request, SIMULATOR_IDENTITY),
+    }
 
 
 def build_provenance(
@@ -129,6 +138,8 @@ class DeterministicCandidateExecutor:
         candidate_digest = candidate.canonical().digest()
         self.executed.append(candidate_digest)
         self.run_labels.append(run_label)
+        request = build_request(candidate)
+        binding = request_binding(request)
         if candidate_digest in self.failing_digests:
             result = SimulationResult.create(
                 status=SimulationStatus.CRASHED,
@@ -136,13 +147,19 @@ class DeterministicCandidateExecutor:
                     message="deterministic double: candidate marked as failing",
                     details={"stage": "double.execute"},
                 ),
+                **binding,
             )
         else:
             result = SimulationResult.create(
                 status=SimulationStatus.SUCCESS,
                 metadata={"candidate_digest": candidate_digest},
+                **binding,
             )
-        return _execution(candidate, result)
+        return RuntimeExecution(
+            request=request,
+            result=result,
+            provenance=build_provenance(candidate, request),
+        )
 
 
 @dataclass
@@ -162,6 +179,7 @@ class RelabellingCandidateExecutor:
         foreign_result = SimulationResult.create(
             status=SimulationStatus.SUCCESS,
             metadata={"candidate_digest": self.foreign.canonical().digest()},
+            **request_binding(foreign_request),
         )
         return RuntimeExecution(
             request=foreign_request,

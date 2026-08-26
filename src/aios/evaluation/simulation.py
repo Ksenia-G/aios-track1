@@ -96,6 +96,14 @@ class SimulationResult:
     `result_digest` не принимается на веру: он обязан совпадать с
     `compute_result_digest()` от самого объекта. Произвольное значение,
     пришедшее из кеша или извне, делает воспроизводимость фикцией.
+
+    `request_digest`/`simulation_key` -- происхождение результата: какой именно
+    запрос его породил. Без них результат самосогласован, но безымянен, и
+    физически честный результат прогона B невозможно отличить от результата
+    прогона A: оба описывают сами себя правильно. Поля заполняет авторитетный
+    runtime, когда результат создаётся; None остаётся допустимым для
+    исторических и неавторитетных записей, но такой результат не может стать
+    экономически пригодным.
     """
 
     status: SimulationStatus
@@ -104,6 +112,8 @@ class SimulationResult:
     metadata: Mapping[str, JsonValue] = field(default_factory=dict)
     diagnostics: Mapping[str, JsonValue] = field(default_factory=dict)
     failure: SimulationFailure | None = None
+    request_digest: str | None = None
+    simulation_key: str | None = None
 
     def __post_init__(self) -> None:
         expected = compute_result_digest(
@@ -111,12 +121,19 @@ class SimulationResult:
             trajectory_ref=self.trajectory_ref,
             metadata=self.metadata,
             failure=self.failure,
+            request_digest=self.request_digest,
+            simulation_key=self.simulation_key,
         )
         if self.result_digest != expected:
             raise ResultDigestMismatchError(
                 f"result_digest does not match result content: "
                 f"declared {self.result_digest}, expected {expected}"
             )
+
+    @property
+    def is_request_bound(self) -> bool:
+        """Несёт ли результат происхождение запроса, который его породил."""
+        return bool(self.request_digest) and bool(self.simulation_key)
 
     @property
     def supports_constraint_checks(self) -> bool:
@@ -145,6 +162,8 @@ class SimulationResult:
         metadata: Mapping[str, JsonValue] | None = None,
         diagnostics: Mapping[str, JsonValue] | None = None,
         failure: SimulationFailure | None = None,
+        request_digest: str | None = None,
+        simulation_key: str | None = None,
     ) -> "SimulationResult":
         resolved_metadata = dict(metadata or {})
         return cls(
@@ -154,11 +173,27 @@ class SimulationResult:
                 trajectory_ref=trajectory_ref,
                 metadata=resolved_metadata,
                 failure=failure,
+                request_digest=request_digest,
+                simulation_key=simulation_key,
             ),
             trajectory_ref=trajectory_ref,
             metadata=resolved_metadata,
             diagnostics=dict(diagnostics or {}),
             failure=failure,
+            request_digest=request_digest,
+            simulation_key=simulation_key,
+        )
+
+    def bound_to(self, *, request_digest: str, simulation_key: str) -> "SimulationResult":
+        """Копия результата с происхождением запроса, породившего его."""
+        return SimulationResult.create(
+            status=self.status,
+            trajectory_ref=self.trajectory_ref,
+            metadata=self.metadata,
+            diagnostics=self.diagnostics,
+            failure=self.failure,
+            request_digest=request_digest,
+            simulation_key=simulation_key,
         )
 
     def to_json(self) -> dict[str, JsonValue]:
@@ -169,6 +204,8 @@ class SimulationResult:
             "metadata": normalize_json(dict(self.metadata)),
             "diagnostics": normalize_json(dict(self.diagnostics)),
             "failure": self.failure.to_json() if self.failure else None,
+            "request_digest": self.request_digest,
+            "simulation_key": self.simulation_key,
         }
 
     @classmethod
@@ -182,6 +219,12 @@ class SimulationResult:
             metadata=dict(payload.get("metadata") or {}),  # type: ignore[arg-type]
             diagnostics=dict(payload.get("diagnostics") or {}),  # type: ignore[arg-type]
             failure=SimulationFailure.from_json(raw_failure) if raw_failure else None,  # type: ignore[arg-type]
+            request_digest=(
+                str(payload["request_digest"]) if payload.get("request_digest") else None
+            ),
+            simulation_key=(
+                str(payload["simulation_key"]) if payload.get("simulation_key") else None
+            ),
         )
 
 
@@ -191,6 +234,8 @@ def compute_result_digest(
     trajectory_ref: TrajectoryArtifactRef | None,
     metadata: Mapping[str, JsonValue],
     failure: SimulationFailure | None = None,
+    request_digest: str | None = None,
+    simulation_key: str | None = None,
 ) -> str:
     """Content-identity результата: единственная каноническая семантика.
 
@@ -218,6 +263,10 @@ def compute_result_digest(
             "artifact": artifact_identity,
             "metadata": normalize_json(dict(metadata)),
             "failure": failure.to_json() if failure is not None else None,
+            # Происхождение входит в идентичность: иначе результат можно было бы
+            # перепривязать к другому запросу, сохранив тот же дайджест.
+            "request_digest": request_digest,
+            "simulation_key": simulation_key,
         }
     )
 

@@ -34,6 +34,7 @@ from aios.evaluation.simulation import (
     SimulationRequest,
     SimulationResult,
     SimulationStatus,
+    compute_request_digest,
     compute_simulation_key,
 )
 from aios.evaluation.simulator import Simulator
@@ -57,6 +58,32 @@ from aios.schedule.generator import render_full_schedule
 from aios.schedule.state import FieldState
 
 OPM_SIMULATOR_ID = "aios.execution.opm-flow"
+
+
+def _bind_to_request(
+    result: SimulationResult, request: SimulationRequest, simulation_key: str
+) -> SimulationResult:
+    """Проставить результату происхождение запроса, который его породил.
+
+    Делается здесь, на авторитетной границе runtime-зоны, а не оставляется на
+    усмотрение конкретного адаптера: результат, вернувшийся без происхождения,
+    физически честен, но безымянен, и его невозможно отличить от результата
+    другого прогона. Уже связанный результат перепривязке не подлежит --
+    расхождение означает ошибку сборки, а не физику.
+    """
+    request_digest = compute_request_digest(request)
+    if result.is_request_bound:
+        if result.request_digest != request_digest or result.simulation_key != simulation_key:
+            raise RuntimeExecutionBindingError(
+                "simulator returned a result bound to a different request "
+                f"(expected request {request_digest}, got {result.request_digest})"
+            )
+        return result
+    return result.bound_to(request_digest=request_digest, simulation_key=simulation_key)
+
+
+class RuntimeExecutionBindingError(RuntimeError):
+    """Результат прогона не принадлежит исполнявшемуся запросу."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,14 +185,23 @@ class SimulatorRuntime:
         )
         if mode is ExecutionMode.FULL:
             result = self._run_via_protocol(request, Path(workspace_root) / run_label)
-            return RuntimeExecution(request=request, result=result, provenance=provenance)
-        return self._execute_restart(
+            return RuntimeExecution(
+                request=request,
+                result=_bind_to_request(result, request, simulation_key),
+                provenance=provenance,
+            )
+        execution = self._execute_restart(
             request=request,
             base_provenance=provenance,
             compilation=compilation,
             workspace_root=Path(workspace_root) / run_label,
             restart_date=restart_date,
             reconciliation_tolerance=reconciliation_tolerance,
+        )
+        return RuntimeExecution(
+            request=execution.request,
+            result=_bind_to_request(execution.result, request, simulation_key),
+            provenance=execution.provenance,
         )
 
     def _run_via_protocol(self, request: SimulationRequest, workspace: Path) -> SimulationResult:

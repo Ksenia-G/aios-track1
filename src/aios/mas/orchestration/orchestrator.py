@@ -41,6 +41,7 @@ from aios.evaluation.canonical import JsonValue, digest
 from aios.evaluation.simulation import (
     SimulationRequest,
     SimulatorIdentity,
+    compute_request_digest,
     compute_result_digest,
     compute_simulation_key,
 )
@@ -86,6 +87,7 @@ from aios.mas.selection import (
     EconomicSelector,
     GuardianOutcome,
     SimulationOutcome,
+    VerifiedExecution,
 )
 from aios.state import StateCard
 
@@ -155,12 +157,17 @@ def _require_execution_identity(candidate: MagnitudeCandidate, execution: Runtim
     * `provenance.simulation_key` пересчитывается из фактического запроса и
       записанной идентичности симулятора -- подделать его, не имея запроса
       кандидата, нельзя;
+    * `result.request_digest`/`result.simulation_key` -- происхождение самого
+      результата: физически честный результат другого прогона описывает сам
+      себя правильно, поэтому отличить его можно только по тому, какой запрос
+      его породил;
     * `result.result_digest` пересчитывается из фактического содержимого
-      результата, поэтому подменённый результат перестаёт быть самосогласованным.
+      результата вместе с происхождением, поэтому перепривязать результат к
+      другому запросу, сохранив дайджест, нельзя.
 
-    Чего эти типы не дают: в `SimulationResult` нет ссылки на породивший его
-    запрос. Связь результата с запросом проверяется настолько, насколько её
-    вообще выражают контракты runtime-зоны, и не выдаётся за большее.
+    Возвращается корень происхождения прогона: получить его иначе, чем пройдя
+    эту проверку, нельзя, и всё, что считается ниже по конвейеру, ссылается
+    именно на него, а не на ярлык, написанный вызывающим.
     """
     if not isinstance(execution, RuntimeExecution):
         raise OrchestrationError(
@@ -231,17 +238,37 @@ def _require_execution_identity(candidate: MagnitudeCandidate, execution: Runtim
             "provenance.simulation_key", recomputed_key, provenance.simulation_key
         )
 
-    # 5. Результат обязан быть самосогласованным по собственному содержимому.
+    # 5. Результат обязан называть запрос, который его породил.
+    request_digest = compute_request_digest(request)
+    if not result.is_request_bound:
+        raise _identity_mismatch(
+            "result.request_digest", request_digest, "<missing: result carries no request binding>"
+        )
+    if result.request_digest != request_digest:
+        raise _identity_mismatch("result.request_digest", request_digest, result.request_digest)
+    if result.simulation_key != recomputed_key:
+        raise _identity_mismatch("result.simulation_key", recomputed_key, result.simulation_key)
+
+    # 6. Результат обязан быть самосогласованным вместе со своим происхождением.
     recomputed_result_digest = compute_result_digest(
         status=result.status,
         trajectory_ref=result.trajectory_ref,
         metadata=result.metadata,
         failure=result.failure,
+        request_digest=result.request_digest,
+        simulation_key=result.simulation_key,
     )
     if result.result_digest != recomputed_result_digest:
         raise _identity_mismatch(
             "result.result_digest", recomputed_result_digest, result.result_digest
         )
+
+    return VerifiedExecution(
+        candidate_digest=expected_digest,
+        request_digest=request_digest,
+        simulation_key=recomputed_key,
+        result_digest=result.result_digest,
+    )
 
 
 def _resolve_specialist(
@@ -784,14 +811,13 @@ class ClosedLoopOrchestrator:
                     "in the resolved candidate set"
                 )
             execution = self._candidate_executor.execute(candidate, run_label=candidate_digest)
-            _require_execution_identity(candidate, execution)
+            # Корень происхождения выдаётся только после полной проверки: ниже
+            # по конвейеру нет ни одного ярлыка, который вызывающий мог бы
+            # написать сам.
+            verified = _require_execution_identity(candidate, execution)
             executed[candidate_digest] = (candidate, execution)
 
-            # Идентичность берётся из провенанса прогона, а не из ярлыка,
-            # который проставил вызывающий: ярлык не является доказательством.
-            identity = execution.provenance.candidate_digest
-            result_digest = execution.result.result_digest
-            simulation = SimulationOutcome(candidate_identity=identity, result=execution.result)
+            simulation = SimulationOutcome.verified(verified, execution.result)
 
             guardian_outcome: GuardianOutcome | None = None
             chdd_outcome: ChddOutcome | None = None
@@ -802,17 +828,11 @@ class ClosedLoopOrchestrator:
             if execution.result.supports_objective_evaluation:
                 realized = self._realized_state_extractor.extract(candidate, execution)
                 report = self._guardian.evaluate(realized)
-                guardian_outcome = GuardianOutcome(
-                    candidate_identity=identity,
-                    simulation_result_digest=result_digest,
-                    report=report,
-                )
+                guardian_outcome = GuardianOutcome.verified(verified, report)
                 guardian_verdicts[candidate_digest] = GuardianVerdict.from_report(report)
                 if report.summary.failed == 0:
-                    chdd_outcome = ChddOutcome(
-                        candidate_identity=identity,
-                        simulation_result_digest=result_digest,
-                        result=self._chdd.evaluate(candidate, execution),
+                    chdd_outcome = ChddOutcome.verified(
+                        verified, self._chdd.evaluate(candidate, execution)
                     )
             else:
                 guardian_verdicts[candidate_digest] = GuardianVerdict(

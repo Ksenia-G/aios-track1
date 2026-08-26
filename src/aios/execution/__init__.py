@@ -32,7 +32,11 @@ from aios.execution.execution import (
 )
 from aios.execution.provenance import ExecutionMode, RuntimeProvenance
 from aios.execution.simulator_adapter import OPM_SIMULATOR_ID, OpmFlowSimulator
-from aios.execution.simulator_runtime import RuntimeExecution, SimulatorRuntime
+from aios.execution.simulator_runtime import (
+    RuntimeExecution,
+    RuntimeExecutionBindingError,
+    SimulatorRuntime,
+)
 
 __all__ = [
     "COMPILER_ID",
@@ -49,6 +53,7 @@ __all__ = [
     "RestartChainOutcome",
     "RestartExecutionError",
     "RuntimeExecution",
+    "RuntimeExecutionBindingError",
     "RuntimeProvenance",
     "ScheduleCompilationError",
     "SimulatorRuntime",
