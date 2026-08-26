@@ -25,6 +25,7 @@ from aios.evaluation.simulation import (
     SimulationResult,
     SimulationStatus,
     SimulatorIdentity,
+    compute_simulation_key,
 )
 from aios.execution import ExecutionMode, RuntimeExecution, RuntimeProvenance
 from aios.mas.magnitude import MagnitudeCandidate
@@ -36,48 +37,77 @@ SIMULATOR_IDENTITY = SimulatorIdentity(
 )
 
 
-def _provenance(
-    candidate_digest: str, *, bundle_digest: str, resolver_version: str
+def schedule_digest_for(candidate_digest: str) -> str:
+    """Stand-in for the compiled schedule identity of a candidate."""
+    return digest({"schedule": candidate_digest})
+
+
+def build_request(candidate: MagnitudeCandidate) -> SimulationRequest:
+    """Build a request the way the real SimulatorRuntime builds one.
+
+    The real runtime puts the candidate's own identity into the request, which
+    is what lets a foreign request be recognised regardless of what a
+    provenance record claims. A double that omitted this would make the
+    orchestrator's identity check untestable.
+    """
+    canonical = candidate.canonical()
+    candidate_digest = canonical.digest()
+    return SimulationRequest(
+        payload={
+            "candidate_digest": candidate_digest,
+            "candidate_kind": str(canonical.candidate_kind),
+            "effective_date": canonical.effective_date.isoformat(),
+            "compiler_id": "tests.support.orchestration_doubles",
+            "compiler_version": "1.0.0",
+        },
+        seed=None,
+        model_digest=None,
+        scenario_digest=canonical.bundle_digest,
+        schedule_digest=schedule_digest_for(candidate_digest),
+    )
+
+
+def build_provenance(
+    candidate: MagnitudeCandidate,
+    request: SimulationRequest,
+    *,
+    stamped_digest: str | None = None,
+    stamped_schedule_digest: str | None = None,
+    simulation_key: str | None = None,
 ) -> RuntimeProvenance:
+    """Provenance derived from the request, as the real runtime derives it."""
+    canonical = candidate.canonical()
+    candidate_digest = canonical.digest()
     return RuntimeProvenance(
         execution_mode=ExecutionMode.FULL,
-        simulation_key=digest({"candidate_digest": candidate_digest}),
-        candidate_digest=candidate_digest,
-        candidate_kind="",
-        bundle_digest=bundle_digest,
-        resolver_version=resolver_version,
+        simulation_key=(
+            simulation_key
+            if simulation_key is not None
+            else compute_simulation_key(request, SIMULATOR_IDENTITY)
+        ),
+        candidate_digest=(stamped_digest if stamped_digest is not None else candidate_digest),
+        candidate_kind=str(canonical.candidate_kind),
+        bundle_digest=canonical.bundle_digest,
+        resolver_version=canonical.resolver_version,
         compiler_id="tests.support.orchestration_doubles",
         compiler_version="1.0.0",
-        schedule_sha256=digest({"schedule": candidate_digest}),
+        schedule_sha256=(
+            stamped_schedule_digest
+            if stamped_schedule_digest is not None
+            else request.schedule_digest
+        ),
         baseline_control_digest=digest({"baseline": candidate_digest}),
         action_control_digest=digest({"action": candidate_digest}),
         simulator_identity_json=SIMULATOR_IDENTITY.to_json(),
     )
 
 
-def _execution(
-    candidate: MagnitudeCandidate,
-    result: SimulationResult,
-    *,
-    stamped_digest: str | None = None,
-) -> RuntimeExecution:
-    canonical = candidate.canonical()
-    candidate_digest = canonical.digest()
-    request = SimulationRequest(
-        payload={"candidate_digest": candidate_digest},
-        seed=None,
-        model_digest=None,
-        scenario_digest=canonical.bundle_digest,
-        schedule_digest=digest({"schedule": candidate_digest}),
-    )
+def _execution(candidate: MagnitudeCandidate, result: SimulationResult) -> RuntimeExecution:
+    request = build_request(candidate)
     return RuntimeExecution(
         request=request,
         result=result,
-        provenance=_provenance(
-            stamped_digest if stamped_digest is not None else candidate_digest,
-            bundle_digest=canonical.bundle_digest,
-            resolver_version=canonical.resolver_version,
-        ),
+        provenance=build_provenance(candidate, request),
     )
 
 
@@ -116,22 +146,32 @@ class DeterministicCandidateExecutor:
 
 
 @dataclass
-class MiswiredCandidateExecutor:
-    """Returns a run that belongs to a different candidate.
+class RelabellingCandidateExecutor:
+    """Returns candidate `foreign`'s whole execution, relabelled as the request.
 
-    Models a swapped or wrongly wired runtime. Nothing downstream can notice
-    this by looking at the `SimulationResult` alone, which is precisely why the
-    orchestrator has to check runtime provenance.
+    This is the sharpest form of the attack: the request and the physical
+    result both belong to another candidate, and only the provenance label is
+    rewritten to name the candidate that was actually asked for. An
+    orchestrator that trusts that single field accepts foreign physics.
     """
 
-    foreign_digest: str
+    foreign: MagnitudeCandidate
 
     def execute(self, candidate: MagnitudeCandidate, *, run_label: str) -> RuntimeExecution:
-        result = SimulationResult.create(
+        foreign_request = build_request(self.foreign)
+        foreign_result = SimulationResult.create(
             status=SimulationStatus.SUCCESS,
-            metadata={"candidate_digest": self.foreign_digest},
+            metadata={"candidate_digest": self.foreign.canonical().digest()},
         )
-        return _execution(candidate, result, stamped_digest=self.foreign_digest)
+        return RuntimeExecution(
+            request=foreign_request,
+            result=foreign_result,
+            provenance=build_provenance(
+                self.foreign,
+                foreign_request,
+                stamped_digest=candidate.canonical().digest(),
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,7 +306,7 @@ __all__ = [
     "DeterministicCHDD",
     "DeterministicCandidateExecutor",
     "DeterministicRealizedStateExtractor",
-    "MiswiredCandidateExecutor",
+    "RelabellingCandidateExecutor",
     "ScriptedCHDD",
     "chdd_result",
 ]

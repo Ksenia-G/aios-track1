@@ -37,7 +37,7 @@ from tests.support.orchestration_doubles import (
     DeterministicCandidateExecutor,
     DeterministicCHDD,
     DeterministicRealizedStateExtractor,
-    MiswiredCandidateExecutor,
+    RelabellingCandidateExecutor,
     ScriptedCHDD,
     chdd_result,
 )
@@ -243,11 +243,15 @@ def test_every_boundary_must_be_supplied_explicitly() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_result_belonging_to_another_candidate_is_rejected() -> None:
-    orchestrator = _orchestrator(
-        candidate_executor=MiswiredCandidateExecutor(foreign_digest="f" * 64)
-    )
-    with pytest.raises(OrchestrationError, match="runtime provenance does not belong"):
+def test_foreign_execution_relabelled_as_ours_is_rejected() -> None:
+    """The whole run belongs to another candidate; only the label says otherwise.
+
+    Trusting `provenance.candidate_digest` alone accepted foreign physics all
+    the way through Guardian, CHDD and commit.
+    """
+    foreign = _candidate(CandidateKind.AGENT_BUNDLE, producer_rate=900.0, injector_rate=1.0)
+    orchestrator = _orchestrator(candidate_executor=RelabellingCandidateExecutor(foreign=foreign))
+    with pytest.raises(OrchestrationError, match="does not belong to the executed candidate"):
         orchestrator.run_decision_step(_step_input())
 
 
@@ -609,8 +613,9 @@ def test_first_step_has_no_previous_commit_to_carry_forward() -> None:  # T6
 
 def test_failed_step_leaves_a_deterministic_failure_record() -> None:
     trace = DecisionTrace()
+    foreign = _candidate(CandidateKind.AGENT_BUNDLE, producer_rate=900.0, injector_rate=1.0)
     orchestrator = _orchestrator(
-        candidate_executor=MiswiredCandidateExecutor(foreign_digest="f" * 64),
+        candidate_executor=RelabellingCandidateExecutor(foreign=foreign),
         decision_trace=trace,
     )
     with pytest.raises(OrchestrationError):
@@ -619,10 +624,10 @@ def test_failed_step_leaves_a_deterministic_failure_record() -> None:
     assert len(trace) == 0  # the commit log stays append-only and clean
     assert len(trace.failures) == 1
     failure = trace.failures[0]
-    assert failure.stage == "runtime_provenance"
+    assert failure.stage == "runtime_identity"
     assert failure.state_card_digest
-    assert "provenance" in failure.reason
-    assert trace.failures_to_json()[0]["stage"] == "runtime_provenance"
+    assert "identity" in failure.reason
+    assert trace.failures_to_json()[0]["stage"] == "runtime_identity"
 
 
 def test_successful_step_is_appended_to_the_trace() -> None:

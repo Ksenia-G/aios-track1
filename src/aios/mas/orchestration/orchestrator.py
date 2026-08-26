@@ -25,17 +25,25 @@ Arbiter (`ArbiterDecision.round2_request`) исполняется максиму
 за которым не стоит ни физики, ни легальности, ни экономики. Тестовые
 двойники живут в tests/support и подставляются вызывающей стороной явно.
 
-Результат прогона связан с кандидатом провенансом runtime-зоны, а не
-позиционным доверием: `RuntimeExecution.provenance.candidate_digest` обязан
-совпасть с дайджестом кандидата, который был отправлен на исполнение.
+Прогон связан с кандидатом пересчитанной идентичностью, а не позиционным
+доверием и не одним полем провенанса: сам исполнявшийся `SimulationRequest`
+обязан называть этого кандидата, провенанс -- описывать то же расписание, а
+ключ симуляции -- пересчитываться из фактического запроса. Ярлык, который
+проставил вызывающий, идентичности не устанавливает.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from aios.evaluation.canonical import JsonValue, digest
+from aios.evaluation.simulation import (
+    SimulationRequest,
+    SimulatorIdentity,
+    compute_result_digest,
+    compute_simulation_key,
+)
 from aios.execution import RuntimeExecution
 from aios.mas.arbiter import ArbiterDecision, Round2Request
 from aios.mas.common import MAS_CONTRACT_SCHEMA_VERSION, AgentRole, CandidateKind, DecisionRound
@@ -102,7 +110,7 @@ def _require_dependency(name: str, value: object) -> object:
 
 
 _STAGE_MARKERS: tuple[tuple[str, str], ...] = (
-    ("runtime provenance", "runtime_provenance"),
+    ("runtime execution identity", "runtime_identity"),
     ("duplicate candidate digest", "candidate_resolution"),
     ("executor returned", "runtime_execution"),
     ("CHDD", "economics"),
@@ -121,27 +129,118 @@ def _stage_of(error: OrchestrationError) -> str:
     return "decision_step"
 
 
-def _require_execution_provenance(
-    candidate: MagnitudeCandidate, execution: RuntimeExecution
-) -> None:
-    """Результат обязан принадлежать именно этому кандидату.
+def _identity_mismatch(where: str, expected: object, actual: object) -> OrchestrationError:
+    return OrchestrationError(
+        f"decision_step: runtime execution identity does not belong to the executed "
+        f"candidate ({where}: expected {expected!r}, got {actual!r})"
+    )
 
-    Позиционного доверия здесь недостаточно: `SimulationResult` не несёт
-    идентичности кандидата, поэтому неверно подключённый или перепутанный
-    исполнитель вернул бы чужой прогон, и ни одна дальнейшая стадия этого бы
-    не заметила. Провенанс runtime-зоны привязан к дайджесту кандидата на
-    этапе компиляции расписания -- сверяем именно его.
+
+def _require_execution_identity(candidate: MagnitudeCandidate, execution: RuntimeExecution) -> None:
+    """Прогон обязан принадлежать именно этому кандидату -- по пересчёту.
+
+    Одного поля `provenance.candidate_digest` недостаточно: это ярлык, и
+    исполнитель, вернувший чужой прогон, может проставить в нём нужное
+    значение. Тогда физика кандидата B принималась бы как физика A и доходила
+    до Guardian, CHDD и коммита.
+
+    Поэтому идентичность проверяется по всей доступной цепочке, и там, где
+    типы это позволяют, дайджесты ПЕРЕСЧИТЫВАЮТСЯ из фактических объектов, а
+    не сверяются между двумя записанными полями:
+
+    * сам `SimulationRequest` называет кандидата (runtime кладёт его дайджест,
+      вид и дату в payload, а bundle -- в scenario_digest), поэтому чужой
+      запрос виден независимо от того, что написано в провенансе;
+    * `provenance.schedule_sha256` обязан совпасть с `request.schedule_digest`;
+    * `provenance.simulation_key` пересчитывается из фактического запроса и
+      записанной идентичности симулятора -- подделать его, не имея запроса
+      кандидата, нельзя;
+    * `result.result_digest` пересчитывается из фактического содержимого
+      результата, поэтому подменённый результат перестаёт быть самосогласованным.
+
+    Чего эти типы не дают: в `SimulationResult` нет ссылки на породивший его
+    запрос. Связь результата с запросом проверяется настолько, насколько её
+    вообще выражают контракты runtime-зоны, и не выдаётся за большее.
     """
     if not isinstance(execution, RuntimeExecution):
         raise OrchestrationError(
             f"decision_step: executor returned {type(execution).__name__}, expected RuntimeExecution"
         )
-    expected = candidate.digest()
-    actual = execution.provenance.candidate_digest
-    if actual != expected:
-        raise OrchestrationError(
-            "decision_step: runtime provenance does not belong to the executed candidate "
-            f"(candidate={expected!r}, provenance={actual!r})"
+
+    canonical = candidate.canonical()
+    expected_digest = canonical.digest()
+    request = execution.request
+    provenance = execution.provenance
+    result = execution.result
+
+    if not isinstance(request, SimulationRequest):
+        raise _identity_mismatch("request type", "SimulationRequest", type(request).__name__)
+
+    # 1. Запрос, который реально исполнялся, называет кандидата сам.
+    payload = request.payload if isinstance(request.payload, Mapping) else {}
+    for field_name, expected_value in (
+        ("candidate_digest", expected_digest),
+        ("candidate_kind", str(canonical.candidate_kind)),
+        ("effective_date", canonical.effective_date.isoformat()),
+    ):
+        if field_name not in payload:
+            raise _identity_mismatch(f"request.payload.{field_name}", expected_value, "<missing>")
+        if payload[field_name] != expected_value:
+            raise _identity_mismatch(
+                f"request.payload.{field_name}", expected_value, payload[field_name]
+            )
+    if request.scenario_digest != canonical.bundle_digest:
+        raise _identity_mismatch(
+            "request.scenario_digest", canonical.bundle_digest, request.scenario_digest
+        )
+
+    # 2. Провенанс обязан описывать того же кандидата.
+    for where, expected_value, actual_value in (
+        ("provenance.candidate_digest", expected_digest, provenance.candidate_digest),
+        ("provenance.candidate_kind", str(canonical.candidate_kind), provenance.candidate_kind),
+        ("provenance.bundle_digest", canonical.bundle_digest, provenance.bundle_digest),
+        ("provenance.resolver_version", canonical.resolver_version, provenance.resolver_version),
+    ):
+        if actual_value != expected_value:
+            raise _identity_mismatch(where, expected_value, actual_value)
+
+    # 3. Провенанс и запрос обязаны описывать одно и то же расписание.
+    if not provenance.schedule_sha256:
+        raise _identity_mismatch("provenance.schedule_sha256", "<a schedule digest>", "<missing>")
+    if provenance.schedule_sha256 != request.schedule_digest:
+        raise _identity_mismatch(
+            "provenance.schedule_sha256", request.schedule_digest, provenance.schedule_sha256
+        )
+
+    # 4. Ключ симуляции пересчитывается из фактического запроса.
+    identity_json = provenance.simulator_identity_json
+    if not isinstance(identity_json, Mapping) or "simulator_id" not in identity_json:
+        raise _identity_mismatch(
+            "provenance.simulator_identity", "<a simulator identity>", identity_json
+        )
+    recomputed_key = compute_simulation_key(
+        request,
+        SimulatorIdentity(
+            simulator_id=str(identity_json.get("simulator_id", "")),
+            simulator_version=str(identity_json.get("simulator_version", "")),
+            configuration=identity_json.get("configuration") or {},
+        ),
+    )
+    if provenance.simulation_key != recomputed_key:
+        raise _identity_mismatch(
+            "provenance.simulation_key", recomputed_key, provenance.simulation_key
+        )
+
+    # 5. Результат обязан быть самосогласованным по собственному содержимому.
+    recomputed_result_digest = compute_result_digest(
+        status=result.status,
+        trajectory_ref=result.trajectory_ref,
+        metadata=result.metadata,
+        failure=result.failure,
+    )
+    if result.result_digest != recomputed_result_digest:
+        raise _identity_mismatch(
+            "result.result_digest", recomputed_result_digest, result.result_digest
         )
 
 
@@ -685,7 +784,7 @@ class ClosedLoopOrchestrator:
                     "in the resolved candidate set"
                 )
             execution = self._candidate_executor.execute(candidate, run_label=candidate_digest)
-            _require_execution_provenance(candidate, execution)
+            _require_execution_identity(candidate, execution)
             executed[candidate_digest] = (candidate, execution)
 
             # Идентичность берётся из провенанса прогона, а не из ярлыка,
