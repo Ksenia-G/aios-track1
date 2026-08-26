@@ -246,13 +246,29 @@ def is_prescriptive_key(key: object, *, section: str | None = None) -> bool:
 def _is_prescriptive_pairing(key: object, value: object) -> bool:
     """Предписывающее слово, которому присвоена величина.
 
-    Различает не имя, а пару имя+значение: `{"target": ["SYN-I1"]}` -- ссылка
-    на скважину и факт, `{"target": 240}` -- присвоенная величина, то есть
-    setpoint. Real PressureDiagnostic/SweepDiagnostic несут именно первую форму.
+    Различает не имя, а пару имя+значение. `target` в реальной диагностике --
+    это ссылка на скважину или регион, и такой факт обязан проходить;
+    `target` с величиной -- это setpoint, и проходить не должен:
+
+        {"target": "SYN-I1"}       ссылка на скважину        -- факт
+        {"target": ["SYN-I1"]}     ссылка на скважины        -- факт
+        {"target": 240}            присвоенная величина      -- setpoint
+        {"target": "240 m3/day"}   та же величина строкой    -- setpoint
+
+    Величина, записанная строкой, ничем не безопаснее числа: канал прежде
+    закрывался только для скаляров, и `"240 m3/day"` проходил насквозь.
+    Различает не тип значения, а наличие в нём standalone-величины, поэтому
+    идентификатор с цифрами (SYN-I1, SYN-B2, I10) остаётся фактом.
     """
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if _normalize_key(key) not in _PRESCRIPTIVE_PREFIXES:
         return False
-    return _normalize_key(key) in _PRESCRIPTIVE_PREFIXES
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int | float):
+        return True
+    if isinstance(value, str):
+        return contains_numeric_magnitude(value)
+    return False
 
 
 def find_prescriptive_control(
