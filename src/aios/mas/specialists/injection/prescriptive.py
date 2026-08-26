@@ -1,40 +1,34 @@
-"""Запрет прескриптивных чисел и команд в тексте и evidence.
+"""Граница prescriptive control для Injection Controller.
 
-Frozen InjectionIntent не сканирует rationale. Специалист закрывает класс
-утечек: количественная величина в NL-формулировке и eclipse/control token.
-Evidence в каталоге -- только observational keys; всё остальное -- команда.
+Правила живут в общем модуле `aios.mas.specialists.authority`: Production и
+Injection обязаны понимать NO SETPOINTS CROSS одинаково. Здесь остаются только
+имена, специфичные для Injection, и адаптация ошибок под контракт модуля.
+
+Две прежние ошибки этой границы исправлены именно здесь:
+
+* запрет "любой цифры" отклонял SYN-I1, I10, F3, BLOCK-12 -- то есть любой
+  реальный идентификатор в системе. Запрещена величина, а не цифра;
+* закрытый allowlist наблюдательных ключей отклонял реальные
+  PressureDiagnostic/SweepDiagnostic целиком, потому что их схема
+  (metadata/proposal_type/target/reason/confidence/risk_flags) в него не
+  входила. Мир открыт: незнакомый ключ -- ещё не команда.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aios.mas.intents import InjectionIntent
-
-# Факты, которые агент может читать. Любой другой ключ -- потенциальный setpoint.
-OBSERVATIONAL_EVIDENCE_KEYS = frozenset(
-    {
-        "note",
-        "pressure",
-        "status",
-        "synthetic",
-        "trend",
-        "water_cut",
-        "wbhp",
-        "wlpr",
-        "wopr",
-        "wwct",
-        "wwir",
-        "wwit",
-        "wwpr",
-        "wwpt",
-        "wopt",
-    }
+from aios.mas.specialists.authority import (
+    PrescriptiveAuthorityError,
+    find_prescriptive_control,
+)
+from aios.mas.specialists.authority import (
+    reject_prescriptive_text as _reject_text,
 )
 
-# Имена командных полей и eclipse-записей. Не наблюдения вроде WBHP.
+# Имена, которые сам Injection-парсер не принимает как поля intent.
 FORBIDDEN_COMMAND_KEYS = frozenset(
     {
         "bhp",
@@ -56,28 +50,21 @@ FORBIDDEN_COMMAND_KEYS = frozenset(
     }
 )
 
-_COMMAND_TOKEN = re.compile(
-    r"(?i)\b(?:wconinje|wconprod|surface_rate|injection_rate|liquid_rate|"
-    r"injector_control|producer_control|setpoints?)\b"
-)
-
 
 class PrescriptiveTextError(ValueError):
     """Текст или payload несёт командный setpoint, а не наблюдение."""
 
 
 def reject_prescriptive_text(text: str, *, where: str = "rationale_short") -> None:
-    """Отклонить класс численных команд, не одну форму RATE=.
+    """Отклонить численную команду, сохранив идентификаторы с цифрами.
 
-    Структурный rationale не содержит величин: цифры и eclipse-токены -- это
-    setpoint, даже в формулировке 'set the donor to 240' или 'WCONINJE OPEN'.
+    "Move support toward SYN-I1." -- наблюдение и остаётся разрешённым.
+    "Inject 240 m3/day into SYN-I1." -- величина управления и отклоняется.
     """
-    if not text:
-        return
-    if re.search(r"\d", text):
-        raise PrescriptiveTextError(f"{where} contains a numerical setpoint")
-    if _COMMAND_TOKEN.search(text):
-        raise PrescriptiveTextError(f"{where} contains a prescriptive control token")
+    try:
+        _reject_text(text, where=where)
+    except PrescriptiveAuthorityError as exc:
+        raise PrescriptiveTextError(str(exc)) from exc
 
 
 def reject_prescriptive_intent(intent: InjectionIntent) -> None:
@@ -87,24 +74,8 @@ def reject_prescriptive_intent(intent: InjectionIntent) -> None:
 def first_prescriptive_payload_key(
     payload: Mapping[str, Any] | Sequence[Any] | Any,
 ) -> str | None:
-    """Ключ вне observational allowlist или строка с setpoint внутри значения."""
-    if isinstance(payload, Mapping):
-        for key, value in payload.items():
-            folded = str(key).casefold()
-            if folded in FORBIDDEN_COMMAND_KEYS or folded not in OBSERVATIONAL_EVIDENCE_KEYS:
-                return folded
-            if isinstance(value, str):
-                try:
-                    reject_prescriptive_text(value, where=folded)
-                except PrescriptiveTextError:
-                    return folded
-            nested = first_prescriptive_payload_key(value)
-            if nested is not None:
-                return nested
-        return None
-    if isinstance(payload, list | tuple):
-        for item in payload:
-            nested = first_prescriptive_payload_key(item)
-            if nested is not None:
-                return nested
-    return None
+    """Путь до prescriptive control в payload, либо None.
+
+    Наблюдательные числа (WBHP, WWIR, confidence, тренды) -- факты и проходят.
+    """
+    return find_prescriptive_control(payload)

@@ -129,3 +129,36 @@ def test_rejects_mixed_batch_entirely() -> None:
     }
     with pytest.raises(ParseError):
         StrictOutputParser().parse(json.dumps(payload))
+
+
+# ---------------------------------------------------------------------------
+# COMPLETION I5 -- duplicate keys and non-finite constants refused explicitly.
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_top_level_json_key_is_rejected() -> None:
+    with pytest.raises(ParseError, match="duplicate JSON key"):
+        StrictOutputParser().parse('{"intents": [], "intents": []}')
+
+
+def test_duplicate_key_inside_intent_is_rejected() -> None:
+    raw = (
+        '{"intents": [{"action": "HOLD", "action": "SCALE_TOTAL_INJECTION", '
+        '"direction": "NONE", "intensity": "NONE", "donor_wells": [], '
+        '"recipient_wells": [], "source_regions": [], "target_regions": [], '
+        '"evidence_ids": [], "uncertainty": "LOW", "rationale_short": ""}]}'
+    )
+    with pytest.raises(ParseError, match="duplicate JSON key"):
+        StrictOutputParser().parse(raw)
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_json_constants_are_rejected(constant: str) -> None:
+    raw = (
+        '{"intents": [{"action": "HOLD", "direction": "NONE", "intensity": '
+        f'{constant}, "donor_wells": [], "recipient_wells": [], '
+        '"source_regions": [], "target_regions": [], "evidence_ids": [], '
+        '"uncertainty": "LOW", "rationale_short": ""}]}'
+    )
+    with pytest.raises(ParseError, match="non-finite"):
+        StrictOutputParser().parse(raw)

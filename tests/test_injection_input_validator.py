@@ -81,3 +81,29 @@ def test_round2_rejects_arbiter_peer() -> None:
     )
     with pytest.raises(InputValidationError, match="must be PRODUCTION"):
         InputValidator().validate(envelope)
+
+
+# ---------------------------------------------------------------------------
+# COMPLETION I4 -- Round2 peer identities must be unambiguous.
+# ---------------------------------------------------------------------------
+
+
+def test_round2_rejects_duplicate_peer_proposal_digests() -> None:
+    duplicate = ProposalReference(role=AgentRole.PRODUCTION, proposal_digest="e" * 64)
+    envelope = synthetic_injection_envelope(
+        round=DecisionRound.ROUND_2,
+        peer_proposals=(duplicate, duplicate),
+    )
+    with pytest.raises(InputValidationError, match="repeats proposal_digest"):
+        InputValidator().validate(envelope)
+
+
+def test_round2_accepts_distinct_production_peers() -> None:
+    envelope = synthetic_injection_envelope(
+        round=DecisionRound.ROUND_2,
+        peer_proposals=(
+            ProposalReference(role=AgentRole.PRODUCTION, proposal_digest="a" * 64),
+            ProposalReference(role=AgentRole.PRODUCTION, proposal_digest="b" * 64),
+        ),
+    )
+    assert InputValidator().validate(envelope) is envelope

@@ -124,7 +124,7 @@ def test_rejects_rate_assignment_in_rationale() -> None:
         uncertainty=UncertaintyLevel.MEDIUM,
         rationale_short="Move RATE=240 from the donor to the recipient.",
     )
-    with pytest.raises(VocabularyError, match="numerical setpoint"):
+    with pytest.raises(VocabularyError, match="numerical"):
         VocabularyValidator().validate_intents(
             (intent,),
             allowed_actions=(InjectionAction.HOLD, InjectionAction.REALLOCATE_INJECTION),

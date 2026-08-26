@@ -70,8 +70,30 @@ def test_rejects_prescriptive_rate_key() -> None:
             payload={"surface_rate": 240},
         )
     )
-    with pytest.raises(EvidenceBuildError, match="prescriptive key 'surface_rate'"):
+    with pytest.raises(EvidenceBuildError, match="surface_rate"):
         EvidenceBuilder().build(envelope)
+
+
+def test_accepts_real_repository_diagnostics() -> None:
+    """PressureDiagnostic/SweepDiagnostic must reach the specialist."""
+    from aios.diagnostics import PressureDiagnostic, SweepDiagnostic
+    from tests.support.mas_team_fixtures import synthetic_state_card
+
+    card = synthetic_state_card()
+    envelope = synthetic_injection_envelope(
+        pressure_diagnostic=EvidenceArtifact(
+            evidence_id="SYN-real-pressure",
+            kind="pressure_diagnostic",
+            payload=PressureDiagnostic().propose(card).to_json(),
+        ),
+        sweep_diagnostic=EvidenceArtifact(
+            evidence_id="SYN-real-sweep",
+            kind="sweep_diagnostic",
+            payload=SweepDiagnostic().propose(card).to_json(),
+        ),
+    )
+    context = EvidenceBuilder().build(envelope)
+    assert {"SYN-real-pressure", "SYN-real-sweep"} <= context.known_ids
 
 
 def test_rejects_unknown_numeric_target_key() -> None:
@@ -82,7 +104,7 @@ def test_rejects_unknown_numeric_target_key() -> None:
             payload={"target": 240},
         )
     )
-    with pytest.raises(EvidenceBuildError, match="prescriptive key 'target'"):
+    with pytest.raises(EvidenceBuildError, match="target"):
         EvidenceBuilder().build(envelope)
 
 
@@ -94,7 +116,7 @@ def test_rejects_setpoint_smuggled_in_note() -> None:
             payload={"note": "set the donor to 240"},
         )
     )
-    with pytest.raises(EvidenceBuildError, match="prescriptive key 'note'"):
+    with pytest.raises(EvidenceBuildError, match="note"):
         EvidenceBuilder().build(envelope)
 
 

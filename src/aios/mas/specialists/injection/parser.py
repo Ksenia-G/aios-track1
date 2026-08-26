@@ -66,7 +66,13 @@ def _load_object(text: str) -> dict[str, Any]:
     if not stripped.startswith("{"):
         raise ParseError("response must be a JSON object")
     try:
-        payload = json.loads(stripped)
+        payload = json.loads(
+            stripped,
+            object_pairs_hook=_object_without_duplicate_keys,
+            parse_constant=_reject_non_finite_constant,
+        )
+    except ParseError:
+        raise
     except json.JSONDecodeError as exc:
         raise ParseError("response is not valid JSON") from exc
     if not isinstance(payload, dict):
@@ -163,3 +169,22 @@ def _first_forbidden_key(
             if nested is not None:
                 return nested
     return None
+
+
+def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Дубль ключа -- не «последний выигрывает», а отказ.
+
+    Молчаливое last-value-wins позволяет спрятать второе значение того же
+    поля от любого, кто читает ответ модели глазами.
+    """
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ParseError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_non_finite_constant(value: str) -> None:
+    """NaN/Infinity невыразимы в каноническом JSON и запрещены явно."""
+    raise ParseError(f"non-finite JSON constant {value!r} is forbidden")

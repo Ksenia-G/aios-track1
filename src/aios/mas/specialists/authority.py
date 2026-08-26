@@ -243,6 +243,18 @@ def is_prescriptive_key(key: object, *, section: str | None = None) -> bool:
     return tokens[0] in _PRESCRIPTIVE_PREFIXES and bool(token_set & _CONTROL_METRIC_TOKENS)
 
 
+def _is_prescriptive_pairing(key: object, value: object) -> bool:
+    """Предписывающее слово, которому присвоена величина.
+
+    Различает не имя, а пару имя+значение: `{"target": ["SYN-I1"]}` -- ссылка
+    на скважину и факт, `{"target": 240}` -- присвоенная величина, то есть
+    setpoint. Real PressureDiagnostic/SweepDiagnostic несут именно первую форму.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return False
+    return _normalize_key(key) in _PRESCRIPTIVE_PREFIXES
+
+
 def find_prescriptive_control(
     value: object, path: str = "payload", *, section: str | None = None
 ) -> str | None:
@@ -253,7 +265,7 @@ def find_prescriptive_control(
     """
     if isinstance(value, Mapping):
         for key, item in value.items():
-            if is_prescriptive_key(key, section=section):
+            if is_prescriptive_key(key, section=section) or _is_prescriptive_pairing(key, item):
                 return f"{path}.{key}"
             found = find_prescriptive_control(item, f"{path}.{key}", section=_normalize_key(key))
             if found is not None:

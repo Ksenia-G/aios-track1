@@ -39,8 +39,17 @@ class InputValidator:
 def _require_production_peers(envelope: InjectionEnvelope) -> None:
     if not envelope.peer_proposals:
         raise InputValidationError("ROUND_2 requires non-empty peer_proposals")
+    seen: set[str] = set()
     for index, reference in enumerate(envelope.peer_proposals):
         if reference.role is not AgentRole.PRODUCTION:
             raise InputValidationError(
                 f"ROUND_2 peer_proposals[{index}] must be PRODUCTION, got {reference.role}"
             )
+        # Один и тот же proposal, поданный дважды, делает контекст Round2
+        # неоднозначным: непонятно, одно это мнение соседа или два.
+        if reference.proposal_digest in seen:
+            raise InputValidationError(
+                f"ROUND_2 peer_proposals[{index}] repeats proposal_digest "
+                f"{reference.proposal_digest!r}"
+            )
+        seen.add(reference.proposal_digest)

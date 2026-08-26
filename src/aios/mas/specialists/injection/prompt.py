@@ -47,19 +47,45 @@ class PromptBuilder:
                 "intensity": sorted(member.value for member in Intensity),
                 "uncertainty": sorted(member.value for member in UncertaintyLevel),
             },
+            # Наблюдательное состояние скважин -- это факты, на которых
+            # специалист рассуждает. current_target/control_mode -- снимок
+            # текущего режима, а не предписание: он описывает, что уже стоит.
             "wells": [
                 {
                     "well_id": well.well_id,
                     "role": str(well.role),
                     "status": well.status,
+                    "control_mode": well.control_mode,
+                    "current_target": well.current_target,
+                    "realized": {
+                        "BHP": well.bhp,
+                        "WWIR": well.wwir,
+                        "WLPR": well.wlpr,
+                        "WOPR": well.wopr,
+                        "WWPR": well.wwpr,
+                        "WWCT": well.wct,
+                    },
+                    "derived": {
+                        "producer_bhp_margin": well.producer_bhp_margin,
+                        "injector_bhp_margin": well.injector_bhp_margin,
+                        "wlpr_margin": well.wlpr_margin,
+                    },
                 }
                 for well in envelope.state_card.wells
             ],
+            "field_state": envelope.state_card.field.to_json(),
+            "geology": envelope.state_card.geology.to_json(),
+            "uncertainty": envelope.state_card.uncertainty.to_json(),
+            # Содержание диагностики, а не только её имя. Идентификатор без
+            # содержания не является evidence: без payload два материально
+            # разных диагноза давали побайтово одинаковый промпт, и специалист
+            # не мог отличить стабильное давление от падающего.
             "evidence": [
                 {
                     "evidence_id": artifact.evidence_id,
                     "kind": artifact.kind,
                     "source_version": artifact.source_version,
+                    "payload": artifact.to_json()["payload"],
                 }
                 for artifact in EvidenceBuilder().build(envelope).artifacts
             ],
