@@ -23,14 +23,20 @@ fake-CHDD, подставленные молча, дают «успешную с
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from aios.agents.constraint_guardian import FAIL, ConstraintReport
 from aios.chdd.runner import ChddResult
 from aios.evaluation.canonical import JsonValue
-from aios.execution import ExecutionMode, RuntimeExecution, SimulatorRuntime
+from aios.execution import (
+    DEFAULT_RECONCILIATION_TOLERANCE,
+    ExecutionMode,
+    RuntimeExecution,
+    SimulatorRuntime,
+)
 from aios.mas.arbiter import ArbiterDecision
 from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.magnitude import MagnitudeCandidate
@@ -182,7 +188,17 @@ class SimulatorRuntimeExecutor:
     workspace_root: Path
     mode: ExecutionMode = ExecutionMode.FULL
     policy_id: str | None = None
-    _restart_date: object = field(default=None, repr=False)
+    restart_date: date | None = None
+    reconciliation_tolerance: float = DEFAULT_RECONCILIATION_TOLERANCE
+
+    def __post_init__(self) -> None:
+        # RESTART без даты не является ускорением: runtime откажет уже внутри
+        # прогона, и отказ будет выглядеть как физический, а не как ошибка
+        # сборки. Раньше дата хранилась в поле, которое никуда не передавалось.
+        if self.mode is ExecutionMode.RESTART and self.restart_date is None:
+            raise BoundaryError(
+                "simulator_runtime_executor: RESTART execution requires an explicit restart_date"
+            )
 
     def execute(self, candidate: MagnitudeCandidate, *, run_label: str) -> RuntimeExecution:
         return self.runtime.execute(
@@ -190,6 +206,8 @@ class SimulatorRuntimeExecutor:
             workspace_root=Path(self.workspace_root),
             run_label=run_label,
             mode=self.mode,
+            restart_date=self.restart_date,
+            reconciliation_tolerance=self.reconciliation_tolerance,
             policy_id=self.policy_id,
         )
 
