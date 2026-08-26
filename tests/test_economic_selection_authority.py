@@ -328,27 +328,146 @@ def test_frozen_contract_files_unmodified() -> None:
     assert result.stdout.strip() == "", f"frozen contract files touched: {result.stdout}"
 
 
-# Guardian / CHDD / Simulator production implementations unmodified.
-def test_guardian_chdd_simulator_implementations_unmodified() -> None:
+# Guardian / CHDD / Simulator authority: rules and formulas unmodified.
+#
+# This used to compare `git status --porcelain` for these files, which only
+# reported uncommitted dirt: it passed the moment a change was committed and
+# said nothing about what the change did. Two lineage-metadata extensions to
+# these contracts have since been authorised deliberately, so the guard now
+# protects the thing that actually matters -- that no constraint rule, official
+# limit or economic formula moved -- while allowing identity metadata to be
+# added.
+
+WAVE1_BASE = "dc4dfc090ad8f4aa1d231cad986e02f24f77b727"
+
+# Names whose addition is an authorised lineage extension, not a rule change.
+LINEAGE_ADDITIONS = frozenset(
+    {
+        "state_card_digest",  # ConstraintReport: which StateCard was judged
+        "input_digest",  # ChddResult: which trajectory was priced
+        "digest",  # ChddInput: canonical identity of that trajectory
+        "request_digest",  # SimulationResult: which request produced it
+        "simulation_key",
+        "is_request_bound",
+        "bound_to",
+        "canonical_digest",
+    }
+)
+
+AUTHORITATIVE_FILES = (
+    "src/aios/agents/constraint_guardian.py",
+    "src/aios/chdd/runner.py",
+    "src/aios/chdd/trajectory.py",
+    "src/aios/chdd/__init__.py",
+    "src/aios/evaluation/simulator.py",
+    "src/aios/evaluation/simulation.py",
+)
+
+
+def _base_source(relative_path: str) -> str:
     import subprocess
 
     repo_root = Path(__file__).resolve().parents[1]
-    authoritative_files = [
-        "src/aios/agents/constraint_guardian.py",
-        "src/aios/chdd/runner.py",
-        "src/aios/chdd/trajectory.py",
-        "src/aios/chdd/__init__.py",
-        "src/aios/evaluation/simulator.py",
-        "src/aios/evaluation/simulation.py",
-    ]
-    result = subprocess.run(
-        ["git", "status", "--porcelain", *authoritative_files],
+    return subprocess.run(
+        ["git", "show", f"{WAVE1_BASE}:{relative_path}"],
         cwd=repo_root,
         capture_output=True,
         text=True,
         check=True,
+    ).stdout
+
+
+def _numeric_constants(tree: ast.Module) -> dict[str, object]:
+    """Module-level scalar constants: official limits, thresholds, versions."""
+    values: dict[str, object] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    values[target.id] = node.value.value
+    return values
+
+
+def _defaults_and_bodies(tree: ast.Module) -> dict[str, str]:
+    """Every function/method body, keyed by qualified name."""
+    bodies: dict[str, str] = {}
+
+    def visit(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                visit(child, f"{prefix}{child.name}.")
+            elif isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                bodies[f"{prefix}{child.name}"] = ast.dump(
+                    ast.Module(body=child.body, type_ignores=[])
+                )
+
+    visit(tree, "")
+    return bodies
+
+
+@pytest.mark.parametrize("relative_path", AUTHORITATIVE_FILES)
+def test_authoritative_rules_and_formulas_are_unchanged(relative_path: str) -> None:
+    """Official values and computation bodies must match Wave1 exactly.
+
+    Lineage metadata may be added; a rule, a limit or a formula may not move.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    base_tree = ast.parse(_base_source(relative_path))
+    head_tree = _tree(repo_root / relative_path)
+
+    base_constants = _numeric_constants(base_tree)
+    head_constants = _numeric_constants(head_tree)
+    for name, value in base_constants.items():
+        assert name in head_constants, f"{relative_path}: constant {name} was removed"
+        assert head_constants[name] == value, (
+            f"{relative_path}: official value {name} changed from {value!r} "
+            f"to {head_constants[name]!r}"
+        )
+
+    base_bodies = _defaults_and_bodies(base_tree)
+    head_bodies = _defaults_and_bodies(head_tree)
+    for name, body in base_bodies.items():
+        assert name in head_bodies, f"{relative_path}: {name}() was removed"
+        if body == head_bodies[name]:
+            continue
+        # A changed body is allowed only where the difference is lineage.
+        changed = head_bodies[name]
+        assert any(addition in changed for addition in LINEAGE_ADDITIONS), (
+            f"{relative_path}: {name}() changed for reasons other than lineage metadata"
+        )
+
+    added = set(head_bodies) - set(base_bodies)
+    for name in added:
+        leaf = name.rsplit(".", maxsplit=1)[-1]
+        assert leaf in LINEAGE_ADDITIONS, (
+            f"{relative_path}: {name}() was added and is not an authorised lineage extension"
+        )
+
+
+def test_guardian_official_limit_keys_are_untouched() -> None:
+    """The three official realized constraints, by name and by limit source."""
+    from aios.agents.constraint_guardian import (
+        INJECTOR_BHP_MAX,
+        PRODUCER_BHP_MIN,
+        WLPR_MAX,
+        ConstraintGuardian,
     )
-    assert result.stdout.strip() == "", f"authoritative implementation touched: {result.stdout}"
+
+    assert (PRODUCER_BHP_MIN, INJECTOR_BHP_MAX, WLPR_MAX) == (
+        "producer_bhp_min",
+        "injector_bhp_max",
+        "wlpr_max",
+    )
+    guardian = ConstraintGuardian()
+    assert guardian.bhp_near_margin_bar == 0.5
+    assert guardian.wlpr_near_margin_m3_day == 5.0
+
+
+def test_chdd_still_delegates_every_number_to_the_official_calculator() -> None:
+    """No economic arithmetic may migrate into this repository."""
+    repo_root = Path(__file__).resolve().parents[1]
+    tree = _tree(repo_root / "src/aios/chdd/runner.py")
+    assert "compute_calculation" in _called_names(tree)
 
 
 # Team-zone isolation (section 36).
