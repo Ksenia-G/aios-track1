@@ -28,6 +28,7 @@ from aios.benchmark.contracts import (
 )
 from aios.evaluation.canonical import digest
 from aios.mas.arbitration import DeterministicArbiter
+from aios.mas.common import ProposalSource
 from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.evidence import EvidenceArtifact, HorizonContext, MemorySlice
 from aios.mas.intents import InjectionAction, ProductionAction
@@ -185,8 +186,15 @@ def run_mas_variant(
         production_agent_factory=lambda enabled: ProductionController(
             llm_enabled=enabled, provider=production_provider
         ),
+        # InjectionController's llm_source is a static constructor knob (the
+        # LlmProvider protocol returns bare text, so it cannot carry its own
+        # provenance); the live adapter declares its provenance via `.source`
+        # (see InjectionLiveProvider), so read it here rather than defaulting
+        # a real live completion to the LLM_LOCAL fallback value.
         injection_agent_factory=lambda enabled: InjectionController(
-            llm_enabled=enabled, llm_provider=injection_provider
+            llm_enabled=enabled,
+            llm_provider=injection_provider,
+            llm_source=getattr(injection_provider, "source", ProposalSource.LLM_LOCAL),
         ),
         arbiter=arbiter,
         magnitude_resolver=resolver,

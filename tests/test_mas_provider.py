@@ -273,6 +273,80 @@ def test_injection_adapter_returns_plain_text_and_keeps_provenance() -> None:
     assert adapter.last_completion.model_id == "test-model"
 
 
+def test_injection_adapter_defaults_to_llm_live_source() -> None:
+    """Same default as `ProductionLiveProvider`: the live adapter is live."""
+    transport = _ScriptedTransport((200, _anthropic_body('{"intents": []}')))
+    live = LiveTextCompletionProvider(config=_config(), transport=transport)
+    assert InjectionLiveProvider(provider=live).source is ProposalSource.LLM_LIVE
+
+
+def _injection_envelope():
+    from tests.support.mas_team_fixtures import synthetic_injection_envelope
+
+    return synthetic_injection_envelope()
+
+
+def _hold_injection_json() -> str:
+    return json.dumps(
+        {
+            "intents": [
+                {
+                    "action": "HOLD",
+                    "direction": "NONE",
+                    "intensity": "NONE",
+                    "donor_wells": [],
+                    "recipient_wells": [],
+                    "source_regions": [],
+                    "target_regions": [],
+                    "evidence_ids": [],
+                    "uncertainty": "LOW",
+                    "rationale_short": "",
+                }
+            ]
+        }
+    )
+
+
+def test_injection_live_provider_reaches_llm_live_through_the_controller() -> None:
+    """A successful live external completion must carry live provenance,
+
+    not be indistinguishable from the fake/local provider used elsewhere in
+    this suite. `InjectionController.llm_source` is a static constructor
+    argument (the `LlmProvider` protocol returns bare text, so a completion
+    cannot carry its own provenance) -- the caller is responsible for
+    reading it off the adapter, exactly as `benchmark.mas_variant` does.
+    """
+    from aios.mas.specialists.injection import InjectionController
+
+    transport = _ScriptedTransport((200, _anthropic_body(_hold_injection_json())))
+    live = LiveTextCompletionProvider(config=_config(), transport=transport)
+    adapter = InjectionLiveProvider(provider=live, model_id="test-model")
+    output = InjectionController(
+        llm_enabled=True, llm_provider=adapter, llm_source=adapter.source
+    ).propose(_injection_envelope())
+
+    assert output.primary_proposal.source is ProposalSource.LLM_LIVE
+    assert output.baseline_proposal.source is ProposalSource.DETERMINISTIC_BASELINE
+    assert output.primary_proposal.provenance.model_id == "test-model"
+    assert output.primary_proposal.provenance.response_digest is not None
+    assert output.primary_proposal.provenance.fallback_used is False
+
+
+def test_injection_provider_failure_still_reaches_the_deterministic_floor() -> None:
+    """Provenance propagation must not touch fallback/retry semantics."""
+    from aios.mas.specialists.injection import InjectionController
+
+    class FailingProvider:
+        def complete(self, prompt: str) -> str:
+            raise ProviderTransportError(ProviderErrorKind.SERVER_ERROR, "HTTP 500")
+
+    output = InjectionController(llm_enabled=True, llm_provider=FailingProvider()).propose(
+        _injection_envelope()
+    )
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+    assert output.baseline_proposal.source is ProposalSource.DETERMINISTIC_BASELINE
+
+
 # --- deterministic floor under a hostile provider ------------------------------
 
 

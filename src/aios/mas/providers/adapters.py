@@ -48,11 +48,14 @@ class InjectionLiveProvider:
 
     Контракт возвращает строку, поэтому провенанс последнего вызова хранится
     рядом: так идентичность модели и задержка остаются доступны, а авторитет
-    специалиста не меняется.
+    специалиста не меняется. `source` объявляет, откуда пришла генерация --
+    тем же полем, что и у `ProductionLiveProvider` -- потому что bare-строка
+    из `complete()` не может нести это сама.
     """
 
     provider: TextCompletionProvider
     model_id: str = ""
+    source: ProposalSource = ProposalSource.LLM_LIVE
     structured: bool = False
     last_completion: ProviderCompletion | None = field(default=None, repr=False)
 

@@ -186,6 +186,23 @@ def test_mas_on_injects_providers_without_changing_any_other_dimension() -> None
     assert source.count("llm_enabled=enabled") == 2
 
 
+def test_mas_on_injection_factory_reads_live_provenance_off_the_adapter() -> None:
+    """A successful live Injection completion must not default to LLM_LOCAL.
+
+    `InjectionController.llm_source` is a static constructor argument (the
+    `LlmProvider` protocol returns bare text and cannot carry its own
+    provenance), so the wiring here must read it off the adapter instead of
+    relying on the constructor default -- the same asymmetry that ships
+    natively for Production via `ProviderResponse.source`.
+    """
+    import inspect
+
+    from aios.benchmark import mas_variant
+
+    source = inspect.getsource(mas_variant.run_mas_variant)
+    assert 'getattr(injection_provider, "source", ProposalSource.LLM_LOCAL)' in source
+
+
 def test_provider_is_absent_from_the_mas_off_configuration() -> None:
     """MAS OFF must never construct a live provider."""
     import inspect
