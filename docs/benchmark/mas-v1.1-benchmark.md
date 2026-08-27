@@ -91,7 +91,53 @@ disqualify them under a rule nobody has confirmed.
 reading or printing secrets, and a missing provider produces
 `MAS_ON_BLOCKED_BY_PROVIDER` rather than a fabricated run.
 
-## Results
+## First measured comparison
 
-See `benchmark-results/benchmark_summary.json` for the machine-readable record
-of the run, including every manifest digest and the full fairness matrix.
+Deck `compat_p002`, image `openporousmedia/opmreleases@sha256:18c497f6…`,
+horizon 2014-01-01 → 2015-12-01, 108 report steps, 49 wells, CHDD
+`7.0.2-negative-row-filter`, compensation `OFFICIAL_UNKNOWN_PORT`.
+
+| variant | NPV mln RUB | Δ vs B0 | Δ% | class | Guardian | sims | controls | LLM |
+|---|---:|---:|---:|---|---|---:|---:|---|
+| `B2_EXP004` | 1826.2679 | +795.3902 | +77.16% | DIRECT | PASS | 1 | 211 | off |
+| `B1_EXP003_HISTORICAL` | 1190.5934 | +159.7157 | +15.49% | REFERENCE_ONLY | PASS | 0 | 0 | off |
+| `B1_EXP003` | 1187.2390 | +156.3613 | +15.17% | DIRECT | PASS | 1 | 144 | off |
+| `B0_BASELINE` | 1030.8777 | — | — | reference | PASS | 1 | 120 | off |
+| `B3_MAS_OFF` | 1028.2096 | −2.6681 | −0.26% | NORMALIZED | PASS | 2 | 49 | off |
+
+`B0` and `B2` reproduce their recorded NPV exactly. `B1_EXP003` is the
+re-derived candidate (1187.2390) and differs from the historical record
+(1190.5934) because its schedule differs — the two are listed separately
+rather than merged.
+
+`B4_MAS_ON` was **not run**: no approved cognitive provider exists in this
+project. `.env.example` declares only the deck and calculator paths, and
+`aios.mas.specialists.*.provider` contains a Protocol and a deterministic fake
+with no live client. That is a missing capability, not missing credentials.
+
+## What the first run says about MAS
+
+`B3_MAS_OFF` does not beat the baseline. It ran two simulations and committed
+HOLD, and its CHDD input digest is identical to the standalone HOLD smoke.
+
+The cause is visible in the candidate set, not in the economics: with the
+cognitive branch disabled both specialists return their deterministic
+fallback, which is a HOLD intent. The Arbiter therefore receives no non-HOLD
+structural proposal, no agent bundle is built, and the resolver produces only
+HOLD and the deterministic baseline. **MAS OFF is structurally unable to
+exceed its own floor** — there is no upside candidate in the set to select.
+
+The residual −2.67 mln RUB against `B0` is schedule lineage, not decision
+quality: MAS compiles HOLD through `compile_candidate_schedule` while the
+baseline renders through the experiment path, and the two produce different
+schedule text for the same intent. This is why the comparison is classified
+NORMALIZED rather than DIRECT.
+
+Consequently the strongest submission-safe candidate on this evidence remains
+`B2_EXP004` at 1826.2679, and MAS has not yet been shown to add economic edge.
+`B2_EXP004` passes Guardian under re-run, but its provenance caveat stands: it
+was searched under research compensation assumptions while the official rule is
+unconfirmed.
+
+Full machine-readable record, including every manifest digest and the fairness
+matrix: `docs/benchmark/benchmark_summary.json`.
