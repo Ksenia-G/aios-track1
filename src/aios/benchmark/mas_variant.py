@@ -140,6 +140,8 @@ def run_mas_variant(
     provider_id: str | None = None,
     model_id: str | None = None,
     run_id: str | None = None,
+    production_provider: object | None = None,
+    injection_provider: object | None = None,
     simulation_budget: int = 8,
     decision_steps: int = 1,
     notes: tuple[str, ...] = (),
@@ -180,8 +182,12 @@ def run_mas_variant(
         config=config,
         # Флаг доходит до специалистов через фабрику: топология одна и та же,
         # различается только когнитивная ветка внутри специалиста.
-        production_agent_factory=lambda enabled: ProductionController(llm_enabled=enabled),
-        injection_agent_factory=lambda enabled: InjectionController(llm_enabled=enabled),
+        production_agent_factory=lambda enabled: ProductionController(
+            llm_enabled=enabled, provider=production_provider
+        ),
+        injection_agent_factory=lambda enabled: InjectionController(
+            llm_enabled=enabled, llm_provider=injection_provider
+        ),
         arbiter=arbiter,
         magnitude_resolver=resolver,
         decision_trace=trace,

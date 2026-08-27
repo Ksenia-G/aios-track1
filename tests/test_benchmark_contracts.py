@@ -292,22 +292,32 @@ def test_deterministic_tie_between_equal_npv_is_stable() -> None:
 
 
 def test_provider_detection_reports_absence_without_secrets(monkeypatch) -> None:
-    monkeypatch.delenv("AIOS_LLM_PROVIDER", raising=False)
-    monkeypatch.delenv("AIOS_LLM_MODEL", raising=False)
+    monkeypatch.delenv("MAS_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("MAS_LLM_MODEL", raising=False)
     availability = detect_provider()
     assert availability.available is False
     assert availability.provider_id is None
     body = str(availability.to_json())
-    assert "key" not in body.lower() or "AIOS_LLM" in body
+    assert "MAS_LLM" in body
 
 
-def test_named_provider_without_a_client_is_still_unavailable(monkeypatch) -> None:
-    """Naming a model does not conjure an approved client implementation."""
-    monkeypatch.setenv("AIOS_LLM_PROVIDER", "some-provider")
-    monkeypatch.setenv("AIOS_LLM_MODEL", "some-model")
+def test_named_provider_without_a_credential_is_unavailable(monkeypatch) -> None:
+    """A named model does not conjure an approved credential."""
+    monkeypatch.setenv("MAS_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("MAS_LLM_MODEL", "some-model")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     availability = detect_provider()
     assert availability.available is False
-    assert "client" in availability.reason
+    assert "credential" in availability.reason
+    assert availability.model_id == "some-model"
+
+
+def test_unsupported_provider_name_is_reported_not_guessed(monkeypatch) -> None:
+    monkeypatch.setenv("MAS_LLM_PROVIDER", "definitely-not-a-provider")
+    monkeypatch.setenv("MAS_LLM_MODEL", "some-model")
+    availability = detect_provider()
+    assert availability.available is False
+    assert "unsupported provider" in availability.reason
 
 
 def test_frame_comparable_keys_cover_every_frame_field() -> None:

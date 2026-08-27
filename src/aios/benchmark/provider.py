@@ -7,16 +7,15 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 #: Переменные окружения, объявленные политикой проекта (.env.example).
 #: Провайдера LLM среди них нет намеренно: проект его пока не объявляет.
 DECLARED_EXTERNAL_VARIABLES = ("MODEL_Y_ROOT", "CHDD_ROOT")
 
-#: Переменная, которой проект объявил бы одобренного провайдера, если бы имел его.
-PROVIDER_ENV_VARIABLE = "AIOS_LLM_PROVIDER"
-MODEL_ENV_VARIABLE = "AIOS_LLM_MODEL"
+#: Объявленные проектом переменные когнитивного провайдера.
+from aios.mas.providers.config import MODEL_ENV as MODEL_ENV_VARIABLE
+from aios.mas.providers.config import PROVIDER_ENV as PROVIDER_ENV_VARIABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,55 +37,73 @@ class ProviderAvailability:
 
 
 def detect_provider() -> ProviderAvailability:
-    """Определить, можно ли вообще запустить MAS ON.
+    """Определить, можно ли запустить MAS ON.
 
-    Требуется одновременно объявленная конфигурация и реализация клиента. В
-    репозитории сейчас нет ни того, ни другого: `provider.py` специалистов
-    содержит только протокол и детерминированный fake, а `.env.example`
-    объявляет лишь пути к колоде и пакету ЧДД.
+    Клиент в проекте теперь есть; недостающим звеном остаётся одобренная
+    конфигурация. Отсутствие ключа -- это отсутствие варианта MAS ON, а не
+    повод его сымитировать.
     """
-    provider_id = os.environ.get(PROVIDER_ENV_VARIABLE) or None
-    model_id = os.environ.get(MODEL_ENV_VARIABLE) or None
+    from aios.mas.providers.config import (
+        ProviderConfigError,
+        credential_env_for,
+        load_provider_config,
+    )
 
-    if not provider_id or not model_id:
+    try:
+        config = load_provider_config()
+    except ProviderConfigError as error:
+        return ProviderAvailability(
+            available=False, provider_id=None, model_id=None, reason=str(error)
+        )
+
+    if config is None:
         return ProviderAvailability(
             available=False,
             provider_id=None,
             model_id=None,
             reason=(
-                f"no approved cognitive provider is configured: {PROVIDER_ENV_VARIABLE} "
-                f"and {MODEL_ENV_VARIABLE} are unset, and the project's .env.example "
-                "declares only MODEL_Y_ROOT and CHDD_ROOT"
+                f"no cognitive provider is configured: set {PROVIDER_ENV_VARIABLE} and "
+                f"{MODEL_ENV_VARIABLE}, plus the provider's documented credential variable"
             ),
         )
 
-    if not _live_client_available():
+    if config.requires_credential and not config._credential:
         return ProviderAvailability(
             available=False,
-            provider_id=provider_id,
-            model_id=model_id,
+            provider_id=config.provider_id,
+            model_id=config.model_id,
             reason=(
-                "a provider is named but no approved live client implementation exists "
-                "in aios.mas.specialists.*.provider: only the Protocol and the "
-                "deterministic fake are present"
+                f"provider {config.provider_id} is configured but its credential variable "
+                f"{credential_env_for(config.kind)} is unset"
             ),
         )
 
     return ProviderAvailability(
         available=True,
-        provider_id=provider_id,
-        model_id=model_id,
+        provider_id=config.provider_id,
+        model_id=config.model_id,
         reason="approved provider configuration and client are both present",
     )
 
 
-def _live_client_available() -> bool:
-    """Есть ли в проекте одобренная реализация живого клиента."""
-    try:
-        from aios.mas.specialists.injection import provider as injection_provider
-    except ImportError:  # pragma: no cover - пакет всегда доступен
-        return False
-    return hasattr(injection_provider, "LiveLlmProvider")
+def build_live_providers():
+    """Собрать адаптеры живого провайдера для обоих специалистов."""
+    from aios.mas.providers import (
+        InjectionLiveProvider,
+        LiveTextCompletionProvider,
+        ProductionLiveProvider,
+    )
+    from aios.mas.providers.config import load_provider_config
+
+    config = load_provider_config()
+    if config is None:
+        return None, None, None
+    live = LiveTextCompletionProvider(config=config)
+    return (
+        ProductionLiveProvider(provider=live),
+        InjectionLiveProvider(provider=live, model_id=config.model_id),
+        config,
+    )
 
 
 __all__ = [
@@ -94,5 +111,6 @@ __all__ = [
     "MODEL_ENV_VARIABLE",
     "PROVIDER_ENV_VARIABLE",
     "ProviderAvailability",
+    "build_live_providers",
     "detect_provider",
 ]

@@ -156,8 +156,14 @@ def run_variants(args: argparse.Namespace, repo_root: Path) -> list[BenchmarkOut
 
         availability = detect_provider()
         if not availability.available:
-            print(f"MAS_ON_BLOCKED_BY_PROVIDER: {availability.reason}", file=sys.stderr)
+            print(
+                f"MAS_ON_BLOCKED_BY_APPROVED_PROVIDER_CREDENTIAL: {availability.reason}",
+                file=sys.stderr,
+            )
         else:
+            from aios.benchmark.provider import build_live_providers
+
+            production_provider, injection_provider, provider_config = build_live_providers()
             for index in range(args.repeats):
                 outcomes.append(
                     run_mas_variant(
@@ -168,6 +174,9 @@ def run_variants(args: argparse.Namespace, repo_root: Path) -> list[BenchmarkOut
                         provider_id=availability.provider_id,
                         model_id=availability.model_id,
                         run_id=f"run-{index + 1}",
+                        production_provider=production_provider,
+                        injection_provider=injection_provider,
+                        notes=(f"provider_config_digest={provider_config.digest()}",),
                         simulation_budget=args.simulation_budget,
                         decision_steps=args.decision_steps,
                     )
