@@ -99,18 +99,18 @@ class _ContextualMagnitudeResolver:
         return DeterministicMagnitudeResolver(context=context).resolve(decision)
 
 
-def _baseline_controls(baseline, effective_date):
-    """Управления опорного расписания на дату начала управления."""
-    producers: dict[str, object] = {}
-    injectors: dict[str, object] = {}
-    for step in baseline.steps:
-        if step.date > effective_date:
-            break
-        for control in step.producers:
-            producers[control.well] = control
-        for control in step.injectors:
-            injectors[control.well] = control
-    return tuple(producers.values()), tuple(injectors.values())
+def _baseline_controls(state):
+    """Опорные управления так, как их выводит компилятор расписания.
+
+    Именно этот срез состояния компилятор сравнивает с HOLD-кандидатом при
+    проверке T6, поэтому резолвер обязан отталкиваться от него же. Свой,
+    похожий, вывод из расписания дал бы формально другой набор -- и точный
+    перенос управлений перестал бы быть точным.
+    """
+    return (
+        tuple(producer.as_producer() for producer in state.producers),
+        tuple(injector.as_injector() for injector in state.injectors),
+    )
 
 
 def _diagnostics(state_card) -> dict[str, EvidenceArtifact]:
@@ -159,7 +159,7 @@ def run_mas_variant(
     )
 
     arbiter = _EnvelopeCapturingArbiter()
-    baseline_producers, baseline_injectors = _baseline_controls(baseline, effective_date)
+    baseline_producers, baseline_injectors = _baseline_controls(state)
     resolver = _ContextualMagnitudeResolver(
         arbiter=arbiter,
         effective_date=effective_date,
