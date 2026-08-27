@@ -12,9 +12,10 @@ MagnitudeResolver, численные управления, Guardian, ЧДД и 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from aios.evaluation.canonical import JsonValue, digest
 
@@ -128,9 +129,16 @@ class ProviderCompletion:
 
 @runtime_checkable
 class TextCompletionProvider(Protocol):
-    """Единственное, что провайдер умеет: промпт -> текст."""
+    """Единственное, что провайдер умеет: промпт -> текст.
 
-    def complete(self, prompt: str) -> ProviderCompletion: ...
+    `response_schema` -- ограничение генерации, необязательное и не меняющее
+    смысла границы: возвращается всё тот же недоверенный текст, который обязан
+    пройти строгий парсер специалиста.
+    """
+
+    def complete(
+        self, prompt: str, *, response_schema: Mapping[str, Any] | None = None
+    ) -> ProviderCompletion: ...
 
 
 __all__ = [

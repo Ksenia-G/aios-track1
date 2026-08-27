@@ -99,9 +99,12 @@ def build_live_providers():
     if config is None:
         return None, None, None
     live = LiveTextCompletionProvider(config=config)
+    # Схему просим только там, где провайдер её действительно поддерживает;
+    # в остальном путь остаётся прежним текстовым дополнением.
+    structured = config.structured_output
     return (
-        ProductionLiveProvider(provider=live),
-        InjectionLiveProvider(provider=live, model_id=config.model_id),
+        ProductionLiveProvider(provider=live, structured=structured),
+        InjectionLiveProvider(provider=live, model_id=config.model_id, structured=structured),
         config,
     )
 

@@ -15,18 +15,25 @@ from dataclasses import dataclass, field
 
 from aios.mas.common import ProposalSource
 from aios.mas.providers.contracts import ProviderCompletion, TextCompletionProvider
+from aios.mas.providers.schemas import injection_response_schema, production_response_schema
 from aios.mas.specialists.production.provider import ProviderResponse
 
 
 @dataclass(frozen=True, slots=True)
 class ProductionLiveProvider:
-    """Адаптер под `ProductionLLMProvider`."""
+    """Адаптер под `ProductionLLMProvider`.
+
+    Схема ограничивает генерацию, но авторитет остаётся у специалиста: текст
+    возвращается как есть и разбирается его строгим парсером.
+    """
 
     provider: TextCompletionProvider
     source: ProposalSource = ProposalSource.LLM_LIVE
+    structured: bool = False
 
     def complete(self, prompt: str) -> ProviderResponse:
-        completion = self.provider.complete(prompt)
+        schema = production_response_schema() if self.structured else None
+        completion = self.provider.complete(prompt, response_schema=schema)
         return ProviderResponse(
             text=completion.text,
             model_id=completion.model_id,
@@ -46,10 +53,12 @@ class InjectionLiveProvider:
 
     provider: TextCompletionProvider
     model_id: str = ""
+    structured: bool = False
     last_completion: ProviderCompletion | None = field(default=None, repr=False)
 
     def complete(self, prompt: str) -> str:
-        completion = self.provider.complete(prompt)
+        schema = injection_response_schema() if self.structured else None
+        completion = self.provider.complete(prompt, response_schema=schema)
         self.last_completion = completion
         return completion.text
 

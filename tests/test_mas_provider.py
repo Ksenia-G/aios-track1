@@ -126,6 +126,8 @@ def test_configuration_never_serialises_the_credential() -> None:
         "temperature",
         "max_tokens",
         "max_attempts",
+        "structured_output",
+        "reasoning_effort",
     }
 
 
@@ -367,3 +369,218 @@ def test_a_live_model_producing_valid_qualitative_output_is_accepted() -> None:
     intent = output.primary_proposal.intents[0]
     assert str(intent.action) == "INCREASE_OFFTAKE"
     assert "liquid_rate" not in json.dumps(intent.to_json())
+
+
+# ---------------------------------------------------------------------------
+# Schema-constrained specialist output.
+#
+# The schema constrains generation. It never becomes the authority: the text
+# still goes through the specialist's strict parser, vocabulary check and
+# NO-SETPOINTS-CROSS boundary, exactly as an unconstrained answer would.
+# ---------------------------------------------------------------------------
+
+
+def _structured_config(**overrides: object) -> ProviderConfig:
+    fields: dict[str, object] = {
+        "kind": ProviderKind.OPENAI_COMPATIBLE,
+        "model_id": "structured-model",
+        "base_url": "https://generativelanguage.example.com/v1beta/openai",
+        "structured_output": True,
+        "reasoning_effort": "low",
+        "_credential": "secret-value-never-printed",
+    }
+    fields.update(overrides)
+    return ProviderConfig(**fields)  # type: ignore[arg-type]
+
+
+def _openai_body(text: str) -> bytes:
+    return json.dumps(
+        {"id": "c-1", "choices": [{"message": {"content": text}}], "usage": {"prompt_tokens": 5}}
+    ).encode()
+
+
+def test_production_schema_permits_only_the_parser_fields() -> None:
+    from aios.mas.providers import production_response_schema, schema_field_names
+    from aios.mas.specialists.production.parser import _INTENT_KEYS
+
+    schema = production_response_schema()
+    intent = schema["properties"]["intents"]["items"]
+    assert set(intent["properties"]) == set(_INTENT_KEYS)
+    assert intent["additionalProperties"] is False
+    assert schema["additionalProperties"] is False
+    assert schema_field_names(schema) >= set(_INTENT_KEYS)
+
+
+def test_injection_schema_permits_only_the_parser_fields() -> None:
+    from aios.mas.providers import injection_response_schema, schema_field_names
+    from aios.mas.specialists.injection.parser import _ALLOWED_INTENT_KEYS
+
+    schema = injection_response_schema()
+    intent = schema["properties"]["intents"]["items"]
+    assert set(intent["properties"]) == set(_ALLOWED_INTENT_KEYS)
+    assert intent["additionalProperties"] is False
+    assert schema_field_names(schema) >= set(_ALLOWED_INTENT_KEYS)
+
+
+@pytest.mark.parametrize("builder", ["production_response_schema", "injection_response_schema"])
+def test_no_numerical_control_field_can_appear_in_a_schema(builder: str) -> None:
+    """The schema is another channel a setpoint could try to travel down."""
+    from aios.mas import providers
+
+    schema = getattr(providers, builder)()
+    names = providers.schema_field_names(schema)
+    assert not (names & providers.FORBIDDEN_SCHEMA_FIELDS)
+
+
+def test_schemas_encode_the_frozen_enums() -> None:
+    from aios.mas.common import Direction, Intensity, UncertaintyLevel
+    from aios.mas.intents import ProductionAction
+    from aios.mas.providers import production_response_schema
+
+    intent = production_response_schema()["properties"]["intents"]["items"]["properties"]
+    assert intent["action"]["enum"] == [m.value for m in ProductionAction]
+    assert intent["direction"]["enum"] == [m.value for m in Direction]
+    assert intent["intensity"]["enum"] == [m.value for m in Intensity]
+    assert intent["uncertainty"]["enum"] == [m.value for m in UncertaintyLevel]
+
+
+def test_absent_schema_leaves_the_legacy_request_unchanged() -> None:
+    transport = _ScriptedTransport((200, _openai_body("plain text")))
+    LiveTextCompletionProvider(config=_structured_config(), transport=transport).complete("p")
+    payload = transport.calls[0]["payload"]
+    assert "response_format" not in payload
+    assert "reasoning_effort" not in payload
+
+
+def test_schema_request_serialises_the_openai_compatible_shape() -> None:
+    from aios.mas.providers import production_response_schema
+
+    transport = _ScriptedTransport((200, _openai_body('{"intents": []}')))
+    provider = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
+    provider.complete("p", response_schema=production_response_schema())
+
+    payload = transport.calls[0]["payload"]
+    fmt = payload["response_format"]
+    assert fmt["type"] == "json_schema"
+    assert fmt["json_schema"]["strict"] is True
+    assert fmt["json_schema"]["schema"]["properties"]["intents"]["type"] == "array"
+    assert payload["reasoning_effort"] == "low"
+
+
+def test_schema_request_without_the_capability_fails_closed() -> None:
+    """Capability is configured, never assumed of an arbitrary provider."""
+    from aios.mas.providers import production_response_schema
+
+    transport = _ScriptedTransport((200, _openai_body("{}")))
+    provider = LiveTextCompletionProvider(
+        config=_structured_config(structured_output=False), transport=transport
+    )
+    with pytest.raises(ProviderTransportError, match="structured output is not enabled"):
+        provider.complete("p", response_schema=production_response_schema())
+    assert transport.calls == []
+
+
+def test_structured_output_cannot_be_enabled_for_an_unwired_provider() -> None:
+    with pytest.raises(ProviderConfigError, match="not wired"):
+        _config(structured_output=True)
+
+
+def test_configuration_records_the_capability_without_a_secret() -> None:
+    body = _structured_config().to_json()
+    assert body["structured_output"] is True
+    assert body["reasoning_effort"] == "low"
+    assert "secret-value-never-printed" not in json.dumps(body)
+
+
+def test_invalid_reasoning_effort_is_refused() -> None:
+    with pytest.raises(ProviderConfigError, match="reasoning_effort"):
+        _structured_config(reasoning_effort="exhaustive")
+
+
+# --- the parser stays the authority even under a schema ----------------------
+
+
+def _structured_production(text: str):
+    from aios.mas.specialists.production import ProductionController
+
+    transport = _ScriptedTransport((200, _openai_body(text)), (200, _openai_body(text)))
+    live = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
+    return ProductionController(
+        llm_enabled=True,
+        provider=ProductionLiveProvider(provider=live, structured=True),
+    ).propose(_production_envelope())
+
+
+def test_valid_structured_response_reaches_llm_live() -> None:
+    output = _structured_production(json.dumps({"intents": [_intent()]}))
+    assert output.primary_proposal.source is ProposalSource.LLM_LIVE
+    assert str(output.primary_proposal.intents[0].action) == "INCREASE_OFFTAKE"
+
+
+def test_malformed_structured_response_still_fails_the_strict_parser() -> None:
+    output = _structured_production("this is not JSON at all")
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+
+
+def test_extra_field_in_a_structured_response_is_still_rejected() -> None:
+    intent = _intent()
+    intent["commentary"] = "an extra field the schema never allowed"
+    output = _structured_production(json.dumps({"intents": [intent]}))
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+
+
+def test_numeric_control_field_in_a_structured_response_is_still_rejected() -> None:
+    intent = _intent()
+    intent["rate"] = 240
+    output = _structured_production(json.dumps({"intents": [intent]}))
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+
+
+def test_setpoint_in_rationale_is_still_rejected_under_a_schema() -> None:
+    output = _structured_production(
+        json.dumps({"intents": [_intent(rationale_short="Set offtake to 420 m3/day.")]})
+    )
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+
+
+def test_structured_path_still_honours_the_bounded_503_retry() -> None:
+    from aios.mas.specialists.production import ProductionController
+
+    transport = _ScriptedTransport(
+        (503, b"{}"), (200, _openai_body(json.dumps({"intents": [_intent()]})))
+    )
+    live = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
+    output = ProductionController(
+        llm_enabled=True, provider=ProductionLiveProvider(provider=live, structured=True)
+    ).propose(_production_envelope())
+    assert output.primary_proposal.source is ProposalSource.LLM_LIVE
+    assert len(transport.calls) == 2
+
+
+def test_exhausted_503_under_a_schema_reaches_the_deterministic_floor() -> None:
+    from aios.mas.specialists.production import ProductionController
+
+    transport = _ScriptedTransport((503, b"{}"), (503, b"{}"), (503, b"{}"), (503, b"{}"))
+    live = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
+    output = ProductionController(
+        llm_enabled=True, provider=ProductionLiveProvider(provider=live, structured=True)
+    ).propose(_production_envelope())
+    assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
+
+
+def test_injection_structured_adapter_requests_its_own_schema() -> None:
+    from aios.mas.providers import injection_response_schema
+
+    transport = _ScriptedTransport((200, _openai_body('{"intents": []}')))
+    live = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
+    InjectionLiveProvider(provider=live, model_id="m", structured=True).complete("p")
+    sent = transport.calls[0]["payload"]["response_format"]["json_schema"]["schema"]
+    assert sent == injection_response_schema()
+
+
+def test_fake_providers_remain_supported() -> None:
+    """Existing deterministic fakes must keep working unchanged."""
+    from aios.mas.specialists.injection.provider import FakeLlmProvider
+
+    fake = FakeLlmProvider('{"intents": []}')
+    assert fake.complete("prompt") == '{"intents": []}'

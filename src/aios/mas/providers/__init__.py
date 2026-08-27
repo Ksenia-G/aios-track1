@@ -23,6 +23,12 @@ from aios.mas.providers.contracts import (
     ProviderUsage,
     TextCompletionProvider,
 )
+from aios.mas.providers.schemas import (
+    FORBIDDEN_SCHEMA_FIELDS,
+    injection_response_schema,
+    production_response_schema,
+    schema_field_names,
+)
 from aios.mas.providers.transport import (
     HttpTransport,
     LiveTextCompletionProvider,
@@ -30,6 +36,7 @@ from aios.mas.providers.transport import (
 )
 
 __all__ = [
+    "FORBIDDEN_SCHEMA_FIELDS",
     "MAX_PROMPT_CHARS",
     "MAX_RESPONSE_CHARS",
     "MODEL_ENV",
@@ -48,5 +55,8 @@ __all__ = [
     "TextCompletionProvider",
     "UrllibTransport",
     "credential_env_for",
+    "injection_response_schema",
     "load_provider_config",
+    "production_response_schema",
+    "schema_field_names",
 ]

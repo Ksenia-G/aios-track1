@@ -20,6 +20,8 @@ TIMEOUT_ENV = "MAS_LLM_TIMEOUT_SECONDS"
 TEMPERATURE_ENV = "MAS_LLM_TEMPERATURE"
 MAX_TOKENS_ENV = "MAS_LLM_MAX_TOKENS"
 BASE_URL_ENV = "MAS_LLM_BASE_URL"
+STRUCTURED_ENV = "MAS_LLM_STRUCTURED_OUTPUT"
+REASONING_ENV = "MAS_LLM_REASONING_EFFORT"
 
 MIN_TIMEOUT_SECONDS = 1.0
 MAX_TIMEOUT_SECONDS = 300.0
@@ -41,6 +43,9 @@ class ProviderKind(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI_COMPATIBLE = "openai_compatible"
 
+
+#: Допустимые бюджеты рассуждения OpenAI-совместимого API.
+_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
 
 #: Переменная с ключом для каждого провайдера, и документированный базовый URL.
 _PROVIDER_CREDENTIAL_ENV = {
@@ -64,6 +69,19 @@ class ProviderConfig:
     temperature: float | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
     max_attempts: int = 2
+    structured_output: bool = False
+    """Просить ли провайдера ограничить генерацию схемой.
+
+    Возможность не универсальна, поэтому включается явной настройкой, а не
+    рассылается всем провайдерам наугад.
+    """
+    reasoning_effort: str | None = None
+    """Бюджет рассуждения, если провайдер его поддерживает.
+
+    Решение специалиста -- небольшой JSON, а не эссе, поэтому низкий бюджет
+    уместен именно здесь. Значение записывается в несекретный провенанс, чтобы
+    прогон оставался воспроизводимым.
+    """
     _credential: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
@@ -88,6 +106,15 @@ class ProviderConfig:
             raise ProviderConfigError("provider config: max_attempts must be within [1, 3]")
         if self.temperature is not None and not 0.0 <= self.temperature <= 2.0:
             raise ProviderConfigError("provider config: temperature must be within [0.0, 2.0]")
+        if self.reasoning_effort is not None and self.reasoning_effort not in _REASONING_EFFORTS:
+            raise ProviderConfigError(
+                f"provider config: reasoning_effort must be one of {sorted(_REASONING_EFFORTS)}"
+            )
+        if self.structured_output and self.kind is not ProviderKind.OPENAI_COMPATIBLE:
+            raise ProviderConfigError(
+                f"provider config: structured output is not wired for {self.kind}; "
+                "enable it only for a provider whose schema capability we actually send"
+            )
 
     @property
     def provider_id(self) -> str:
@@ -116,6 +143,8 @@ class ProviderConfig:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "max_attempts": self.max_attempts,
+            "structured_output": self.structured_output,
+            "reasoning_effort": self.reasoning_effort,
         }
 
     def digest(self) -> str:
@@ -168,6 +197,9 @@ def load_provider_config(environ: dict[str, str] | None = None) -> ProviderConfi
     temperature = _float_env(TEMPERATURE_ENV, None)
     raw_tokens = (env.get(MAX_TOKENS_ENV) or "").strip()
     max_tokens = int(raw_tokens) if raw_tokens else DEFAULT_MAX_TOKENS
+    raw_structured = (env.get(STRUCTURED_ENV) or "").strip().lower()
+    structured = raw_structured in {"1", "true", "yes", "on"}
+    reasoning = (env.get(REASONING_ENV) or "").strip().lower() or None
 
     return ProviderConfig(
         kind=kind,
@@ -176,6 +208,8 @@ def load_provider_config(environ: dict[str, str] | None = None) -> ProviderConfi
         timeout_seconds=timeout if timeout is not None else DEFAULT_TIMEOUT_SECONDS,
         temperature=temperature,
         max_tokens=max_tokens,
+        structured_output=structured,
+        reasoning_effort=reasoning,
         _credential=credential,
     )
 
@@ -189,6 +223,8 @@ __all__ = [
     "MIN_TIMEOUT_SECONDS",
     "MODEL_ENV",
     "PROVIDER_ENV",
+    "REASONING_ENV",
+    "STRUCTURED_ENV",
     "TEMPERATURE_ENV",
     "TIMEOUT_ENV",
     "ProviderConfig",

@@ -14,6 +14,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -107,21 +108,43 @@ def _endpoint(config: ProviderConfig) -> str:
     return f"{config.base_url}/v1/chat/completions"
 
 
-def _payload(config: ProviderConfig, prompt: str) -> dict[str, Any]:
-    if config.kind is ProviderKind.ANTHROPIC:
-        payload: dict[str, Any] = {
-            "model": config.model_id,
-            "max_tokens": config.max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-    else:
-        payload = {
-            "model": config.model_id,
-            "max_tokens": config.max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        }
+def _payload(
+    config: ProviderConfig, prompt: str, response_schema: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": config.model_id,
+        "max_tokens": config.max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
     if config.temperature is not None:
         payload["temperature"] = config.temperature
+
+    if response_schema is None:
+        # Обычное текстовое дополнение: запрос остаётся прежним, и провайдеры
+        # без структурированного вывода ничего нового не получают.
+        return payload
+
+    if not config.structured_output:
+        raise ProviderTransportError(
+            ProviderErrorKind.BAD_REQUEST,
+            "a response schema was requested but structured output is not enabled "
+            "for this provider configuration",
+        )
+    if config.kind is not ProviderKind.OPENAI_COMPATIBLE:  # pragma: no cover - закрыто конфигом
+        raise ProviderTransportError(
+            ProviderErrorKind.BAD_REQUEST,
+            f"structured output is not wired for provider {config.kind}",
+        )
+    payload["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "specialist_intents",
+            "strict": True,
+            "schema": dict(response_schema),
+        },
+    }
+    if config.reasoning_effort is not None:
+        payload["reasoning_effort"] = config.reasoning_effort
     return payload
 
 
@@ -192,7 +215,9 @@ class LiveTextCompletionProvider:
     config: ProviderConfig
     transport: HttpTransport = UrllibTransport()
 
-    def complete(self, prompt: str) -> ProviderCompletion:
+    def complete(
+        self, prompt: str, *, response_schema: Mapping[str, Any] | None = None
+    ) -> ProviderCompletion:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ProviderTransportError(ProviderErrorKind.BAD_REQUEST, "prompt is empty")
         if len(prompt) > MAX_PROMPT_CHARS:
@@ -204,7 +229,7 @@ class LiveTextCompletionProvider:
 
         endpoint = _endpoint(self.config)
         headers = _headers(self.config)
-        payload = _payload(self.config, prompt)
+        payload = _payload(self.config, prompt, response_schema)
         started = time.monotonic()
         last: ProviderTransportError | None = None
 
