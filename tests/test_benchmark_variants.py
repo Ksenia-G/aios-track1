@@ -143,3 +143,77 @@ def test_mas_off_and_mas_on_share_every_non_cognitive_setting() -> None:
     assert "injection_agent_factory" in source
     for forbidden in ("if llm_enabled:", "if not llm_enabled:"):
         assert forbidden not in source, "the cognitive flag must not branch the topology"
+
+
+# --- MAS OFF vs MAS ON differ only in the cognitive dimension ------------------
+
+
+def test_mas_on_injects_providers_without_changing_any_other_dimension() -> None:
+    """The ablation flag may change the cognitive branch and nothing else."""
+    import inspect
+
+    from aios.benchmark import mas_variant
+
+    signature = inspect.signature(mas_variant.run_mas_variant)
+    cognitive = {
+        "llm_enabled",
+        "provider_id",
+        "model_id",
+        "run_id",
+        "production_provider",
+        "injection_provider",
+    }
+    physical = {
+        "context",
+        "variant_id",
+        "initial_state_card",
+        "simulation_budget",
+        "decision_steps",
+        "notes",
+    }
+    assert set(signature.parameters) == cognitive | physical
+
+    source = inspect.getsource(mas_variant.run_mas_variant)
+    # One horizon, one budget, one resolver, one Guardian, one CHDD for both.
+    for shared in (
+        "build_real_closed_loop",
+        "composition.boundaries()",
+        "_ContextualMagnitudeResolver",
+        "HorizonContext",
+    ):
+        assert shared in source
+    # The flag reaches the specialists only through the factories.
+    assert source.count("llm_enabled=enabled") == 2
+
+
+def test_provider_is_absent_from_the_mas_off_configuration() -> None:
+    """MAS OFF must never construct a live provider."""
+    import inspect
+
+    from aios.benchmark import cli
+
+    source = inspect.getsource(cli.run_variants)
+    off_block = source.split('if "mas-off" in requested:')[1].split('if "mas-on" in requested:')[0]
+    assert "build_live_providers" not in off_block
+    assert "llm_enabled=False" in off_block
+
+
+def test_mas_on_manifest_records_provider_identity_but_no_secret() -> None:
+    from aios.benchmark import BENCHMARK_SCHEMA_VERSION, CognitiveConfig
+
+    cognitive = CognitiveConfig(
+        llm_enabled=True, provider_id="anthropic", model_id="a-model", run_id="run-1"
+    )
+    body = cognitive.to_json()
+    assert body["provider_id"] == "anthropic"
+    assert body["model_id"] == "a-model"
+    assert set(body) == {"llm_enabled", "provider_id", "model_id", "run_id", "seed"}
+    assert BENCHMARK_SCHEMA_VERSION
+
+
+def test_blocked_provider_message_names_the_missing_variable_not_a_value() -> None:
+    from aios.benchmark import detect_provider
+
+    availability = detect_provider()
+    if not availability.available:
+        assert "MAS_LLM" in availability.reason or "credential" in availability.reason
