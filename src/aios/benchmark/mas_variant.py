@@ -43,6 +43,7 @@ from aios.mas.orchestration import (
     DecisionTrace,
     OrchestratorConfig,
     build_real_closed_loop,
+    default_next_input,
 )
 from aios.mas.specialists.injection import InjectionController
 from aios.mas.specialists.injection.scope import groundable_injection_actions
@@ -113,6 +114,42 @@ class _ContextualMagnitudeResolver:
             baseline_injectors=self.baseline_injectors,
         )
         return DeterministicMagnitudeResolver(context=context).resolve(decision)
+
+
+def _carry_forward(resolver: _ContextualMagnitudeResolver, committed) -> None:
+    """Перенести ЗАКОММИЧЕННЫЕ управления в контекст следующего шага.
+
+    HOLD на шаге N обязан быть точным переносом того, что реально стоит после
+    шага N-1 (инвариант T6), а не возвратом к исходному baseline. Резолвер
+    держит для этого отдельное поле `previous_*`; пока его никто не обновлял,
+    `previous_* or baseline_*` на каждом шаге отдавал исходный baseline. Пока
+    MAS коммитил baseline-эквивалент, это совпадало случайно -- и разошлось на
+    первом же реальном AGENT_BUNDLE.
+
+    Новых величин здесь не появляется: переносятся ровно те объекты
+    управления, которые уже создал MagnitudeResolver.
+    """
+    resolver.previous_producers = tuple(committed.producers)
+    resolver.previous_injectors = tuple(committed.injectors)
+
+
+def _run_decision_steps(orchestrator, resolver, step_input, steps: int):
+    """`run_steps`, но с переносом закоммиченных управлений между шагами.
+
+    Оркестратор протягивает `previous_committed` во вход следующего шага сам;
+    резолверу тот же факт нужно сообщить отдельно -- он получает только
+    `resolve(decision)` и о шаге ничего не знает.
+    """
+    results = []
+    current = step_input
+    for index in range(steps):
+        result = orchestrator.run_decision_step(current)
+        results.append(result)
+        if index == steps - 1:
+            break
+        _carry_forward(resolver, result.committed_candidate)
+        current = default_next_input(current, result)
+    return tuple(results)
 
 
 def _baseline_controls(state):
@@ -232,7 +269,7 @@ def run_mas_variant(
         **diagnostics,
     )
 
-    results = orchestrator.run_steps(step_input, decision_steps)
+    results = _run_decision_steps(orchestrator, resolver, step_input, decision_steps)
     final = results[-1]
     selected = final.selection.selected
 
