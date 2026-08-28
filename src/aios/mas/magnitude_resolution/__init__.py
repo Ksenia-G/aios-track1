@@ -9,6 +9,13 @@ it explicitly as `aios.mas.magnitude_resolution`.
 Cognitive/provider (LLM) resolver is a separate future task.
 """
 
+from aios.mas.magnitude_resolution.capability import (
+    ActionCapability,
+    injection_capabilities,
+    production_capabilities,
+    supported_injection_actions,
+    supported_production_actions,
+)
 from aios.mas.magnitude_resolution.engine import (
     DeterministicMagnitudeResolver,
     MagnitudeContext,
@@ -22,9 +29,14 @@ from aios.mas.magnitude_resolution.profile import (
 
 __all__ = [
     "PROFILE_VERSION",
+    "ActionCapability",
     "DeterministicMagnitudeResolver",
     "MagnitudeAnchor",
     "MagnitudeContext",
     "MagnitudeResolutionError",
     "ModelYEmpiricalMagnitudeProfile",
+    "injection_capabilities",
+    "production_capabilities",
+    "supported_injection_actions",
+    "supported_production_actions",
 ]

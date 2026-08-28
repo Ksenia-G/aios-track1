@@ -13,7 +13,47 @@ from aios.mas.intents import InjectionAction
 from aios.mas.invariants import require_no_baseline_field
 from aios.mas.specialists.injection.evidence_builder import EvidenceBuilder
 
-PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.0.0"
+PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.1.0"
+
+#: Полевые правила каждого действия, как их проверяет замороженный
+#: `InjectionIntent.__post_init__`.
+#:
+#: Без них модель видела плоский список полей и не могла знать, что
+#: `SCALE_TOTAL_INJECTION` означает глобальное масштабирование и потому
+#: запрещает адресные списки скважин. Она честно пыталась выразить адресную
+#: поддержку неподходящим действием, и строгий парсер справедливо отклонял
+#: результат. Контракт здесь не смягчается -- он просто становится видимым,
+#: как это давно сделано у Production.
+_ACTION_FIELD_CONTRACTS: dict[str, str] = {
+    "HOLD": (
+        "direction NONE; intensity NONE; donor_wells, recipient_wells, "
+        "source_regions and target_regions all empty; rationale_short empty"
+    ),
+    "SCALE_TOTAL_INJECTION": (
+        "global change of total injection. direction UP or DOWN; qualitative intensity; "
+        "donor_wells and recipient_wells MUST be empty. To target specific wells or "
+        "regions choose SUPPORT_REGION or REDUCE_SUPPORT_PATH instead"
+    ),
+    "SUPPORT_REGION": (
+        "targeted increase. direction UP; qualitative intensity; "
+        "recipient_wells or target_regions required"
+    ),
+    "REDUCE_SUPPORT_PATH": (
+        "targeted decrease. direction DOWN; qualitative intensity; "
+        "donor_wells or source_regions required"
+    ),
+    "REALLOCATE_INJECTION": (
+        "move injection within one scope. direction NONE; qualitative intensity; "
+        "donor_wells, recipient_wells, source_regions and target_regions all required; "
+        "source_regions and target_regions must be the SAME scope"
+    ),
+    "REBALANCE_ACROSS_BLOCKS": (
+        "move injection between scopes. direction NONE; qualitative intensity; "
+        "donor_wells, recipient_wells, source_regions and target_regions all required; "
+        "source_regions and target_regions must DIFFER"
+    ),
+    "ALL_NON_HOLD": "cite at least one existing evidence_id; never emit a numerical magnitude",
+}
 
 
 class PromptBuildError(ValueError):
@@ -33,7 +73,8 @@ class PromptBuilder:
             "prompt_builder_version": self.version,
             "role": "INJECTION",
             "task": (
-                "Return a JSON object with key intents. Use only allowed_actions. "
+                "Return a JSON object with key intents. Use only allowed_actions, and "
+                "obey the field contract of the action you choose. "
                 "Do not emit numerical setpoints."
             ),
             "schema_version": envelope.schema_version,
@@ -41,6 +82,14 @@ class PromptBuilder:
             "variant_id": envelope.variant_id,
             "horizon": envelope.horizon_context.to_json(),
             "allowed_actions": sorted(str(action) for action in envelope.allowed_actions),
+            # Только контракты предлагаемых действий: лишние описания склоняют
+            # модель к действию, которого ей всё равно не разрешили.
+            "action_field_contracts": {
+                name: rule
+                for name, rule in _ACTION_FIELD_CONTRACTS.items()
+                if name == "ALL_NON_HOLD"
+                or name in {str(action) for action in envelope.allowed_actions}
+            },
             "vocabulary": {
                 "action": sorted(member.value for member in InjectionAction),
                 "direction": sorted(member.value for member in Direction),

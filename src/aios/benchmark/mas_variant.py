@@ -31,8 +31,12 @@ from aios.mas.arbitration import DeterministicArbiter
 from aios.mas.common import ProposalSource
 from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.evidence import EvidenceArtifact, HorizonContext, MemorySlice
-from aios.mas.intents import InjectionAction, ProductionAction
-from aios.mas.magnitude_resolution import DeterministicMagnitudeResolver, MagnitudeContext
+from aios.mas.magnitude_resolution import (
+    DeterministicMagnitudeResolver,
+    MagnitudeContext,
+    supported_injection_actions,
+    supported_production_actions,
+)
 from aios.mas.orchestration import (
     ClosedLoopOrchestrator,
     DecisionStepInput,
@@ -44,16 +48,14 @@ from aios.mas.specialists.injection import InjectionController
 from aios.mas.specialists.production import ProductionController
 
 #: Действия, доступные специалистам в бенчмарке. Одинаковы для OFF и ON.
-PRODUCTION_ACTIONS = (
-    ProductionAction.HOLD,
-    ProductionAction.INCREASE_OFFTAKE,
-    ProductionAction.REDUCE_OFFTAKE,
-)
-INJECTION_ACTIONS = (
-    InjectionAction.HOLD,
-    InjectionAction.SCALE_TOTAL_INJECTION,
-    InjectionAction.REALLOCATE_INJECTION,
-)
+#:
+#: Список не задан вручную: он выводится из того, что детерминированный
+#: резолвер при активном профиле действительно умеет превратить в числа.
+#: Предлагать модели действие без якоря -- значит гарантированно потерять её
+#: решение между Arbiter и численным разрешением, что и произошло со всеми
+#: пятью живыми Production-предложениями в MAS-PERF-001.
+PRODUCTION_ACTIONS = supported_production_actions()
+INJECTION_ACTIONS = supported_injection_actions()
 
 
 @dataclass
