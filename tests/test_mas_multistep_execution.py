@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 
 import pytest
 
@@ -281,3 +282,30 @@ def test_epoch_rule_is_independent_of_the_cognitive_branch() -> None:
 def test_both_variants_receive_identical_epochs_for_the_same_case() -> None:
     assert decision_epochs(GRID, 3) == decision_epochs(GRID, 3)
     assert decision_epochs(GRID, 3)[0] == GRID[0]
+
+
+# ===========================================================================
+# Линия происхождения: каждый шаг называет СВОЙ вход ЧДД
+# ===========================================================================
+
+
+def test_each_step_records_its_own_chdd_input_digest() -> None:
+    """Запись шага обязана называть вход ЧДД ЭТОГО шага, а не последнего.
+
+    При decision_steps=1 разницы не было -- запись одна. На многошаговом
+    прогоне общий на всех дайджест означает, что lineage шагов 1..N-1
+    указывает на чужой экономический вход, и доказательство происхождения
+    перестаёт быть доказательством.
+    """
+    import inspect
+
+    from aios.benchmark import mas_variant
+
+    source = inspect.getsource(mas_variant.run_mas_variant)
+    lineage_block = source.split("EvaluationLineage(")[1].split("for result in results")[0]
+    assert "result.selection.selected" in lineage_block, (
+        "chdd_input_digest must come from the step's own selection, not the final one"
+    )
+    # Голое `selected` -- это выбор ПОСЛЕДНЕГО шага; допустимо только
+    # `result.selection.selected`.
+    assert re.search(r"(?<!selection\.)\bselected\.chdd", lineage_block) is None

@@ -323,7 +323,14 @@ def run_mas_variant(
         EvaluationLineage(
             schedule_digest=result.committed_candidate.digest(),
             realized_state_digest=result.next_state.digest(),
-            chdd_input_digest=(selected.chdd.input_digest if selected.chdd is not None else None),
+            # Вход ЧДД ЭТОГО шага, а не последнего: общий на всех дайджест
+            # означал бы, что lineage шагов 1..N-1 указывает на чужой
+            # экономический вход.
+            chdd_input_digest=(
+                result.selection.selected.chdd.input_digest
+                if result.selection.selected.chdd is not None
+                else None
+            ),
         )
         for result in results
     )
