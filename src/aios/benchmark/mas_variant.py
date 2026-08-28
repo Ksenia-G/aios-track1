@@ -26,7 +26,13 @@ from aios.benchmark.contracts import (
     RunKind,
     VariantFamily,
 )
+from aios.benchmark.epochs import decision_epochs
 from aios.evaluation.canonical import digest
+from aios.execution.history import (
+    CommittedHistory,
+    CommittedInterval,
+    require_committed_history_lineage,
+)
 from aios.mas.arbitration import DeterministicArbiter
 from aios.mas.common import ProposalSource
 from aios.mas.envelopes import ArbiterEnvelope
@@ -133,21 +139,58 @@ def _carry_forward(resolver: _ContextualMagnitudeResolver, committed) -> None:
     resolver.previous_injectors = tuple(committed.injectors)
 
 
-def _run_decision_steps(orchestrator, resolver, step_input, steps: int):
-    """`run_steps`, но с переносом закоммиченных управлений между шагами.
+def _committed_action_controls(runtime, candidate):
+    """Полные управления, встающие в эпоху кандидата.
 
-    Оркестратор протягивает `previous_committed` во вход следующего шага сам;
-    резолверу тот же факт нужно сообщить отдельно -- он получает только
-    `resolve(decision)` и о шаге ничего не знает.
+    У AGENT_BUNDLE в самом кандидате лежат только изменённые скважины; в силу
+    вступает результат наложения на действующие режимы, и его считает
+    компилятор. Пересчитывать это здесь второй раз значило бы завести второй
+    источник той же правды -- расписание переспрашивается у компилятора.
+    """
+    compiled = runtime.compile(candidate)
+    effective_date = candidate.canonical().effective_date
+    for step in compiled.schedule.canonical().steps:
+        if step.date == effective_date:
+            return step.producers, step.injectors
+    raise BenchmarkError(
+        f"committed controls: compiled schedule has no step at {effective_date.isoformat()}"
+    )
+
+
+def _run_decision_steps(orchestrator, resolver, runtime, step_input, epochs):
+    """Receding-horizon цикл эпох: когнитивный и физический слой идут вместе.
+
+    На каждой эпохе кандидат компилируется как ОДНО полное расписание окна --
+    неизменяемая закоммиченная история плюс собственный хвост, -- поэтому
+    физическое состояние в эпохе порождено ровно теми управлениями, которые
+    действительно были закоммичены. Историю дописывает только ВЫБРАННЫЙ
+    кандидат, и её происхождение проверяется по его имени.
     """
     results = []
     current = step_input
-    for index in range(steps):
+    history = CommittedHistory()
+    for index, epoch in enumerate(epochs):
+        resolver.effective_date = epoch
+        runtime.advance_to_epoch(history, require_history_before=epoch if index else None)
         result = orchestrator.run_decision_step(current)
         results.append(result)
-        if index == steps - 1:
+        if index == len(epochs) - 1:
             break
-        _carry_forward(resolver, result.committed_candidate)
+
+        selected = result.committed_candidate
+        producers, injectors = _committed_action_controls(runtime, selected)
+        history = history.commit(
+            CommittedInterval(
+                effective_date=epoch,
+                producers=producers,
+                injectors=injectors,
+                candidate_digest=result.committed_candidate_digest,
+            )
+        )
+        # Привязка происхождения: история обязана быть дописана ИМЕННО
+        # выбранным кандидатом, а не просто отличаться содержимым.
+        require_committed_history_lineage(history, result.committed_candidate_digest)
+        _carry_forward(resolver, selected)
         current = default_next_input(current, result)
     return tuple(results)
 
@@ -202,7 +245,8 @@ def run_mas_variant(
     """Прогнать настоящий замкнутый контур и собрать запись бенчмарка."""
     started = time.monotonic()
     state, baseline, _history, _start = context.baseline_inputs()
-    effective_date = context.case.management_start_date
+    epochs = decision_epochs(baseline.canonical().dates, decision_steps)
+    effective_date = epochs[0]
 
     composition = build_real_closed_loop(
         case=context.case,
@@ -211,6 +255,7 @@ def run_mas_variant(
         initial_state=state,
         baseline=baseline,
         workspace_root=Path(context.workspace_root) / variant_id,
+        decision_epochs=epochs,
     )
 
     arbiter = _EnvelopeCapturingArbiter()
@@ -269,7 +314,7 @@ def run_mas_variant(
         **diagnostics,
     )
 
-    results = _run_decision_steps(orchestrator, resolver, step_input, decision_steps)
+    results = _run_decision_steps(orchestrator, resolver, composition.runtime, step_input, epochs)
     final = results[-1]
     selected = final.selection.selected
 

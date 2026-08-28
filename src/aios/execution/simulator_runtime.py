@@ -50,6 +50,7 @@ from aios.execution.execution import (
     run_restart_chain,
     write_trajectory_artifact,
 )
+from aios.execution.history import CommittedHistory
 from aios.execution.provenance import ExecutionMode, RuntimeProvenance
 from aios.mas.invariants import require_simulation_floor
 from aios.mas.magnitude import MagnitudeCandidate
@@ -116,10 +117,30 @@ class SimulatorRuntime:
         self._state = state
         self._baseline = baseline
         self._model_digest = model_digest
+        # Многошаговый прогон: неизменяемая история закоммиченных управлений и
+        # дата, до которой она обязана существовать. На первой эпохе и в
+        # одношаговом прогоне оба поля пусты, и поведение не меняется.
+        self._committed_history = CommittedHistory()
+        self._require_history_before: date | None = None
 
     @property
     def case(self) -> Case:
         return self._case
+
+    @property
+    def committed_history(self) -> CommittedHistory:
+        return self._committed_history
+
+    def advance_to_epoch(
+        self, history: CommittedHistory, *, require_history_before: date | None
+    ) -> None:
+        """Перевести runtime в следующую эпоху решения.
+
+        История управлений неизменяема: сюда приходит уже дописанный объект,
+        собранный из ВЫБРАННОГО кандидата предыдущей эпохи.
+        """
+        self._committed_history = history
+        self._require_history_before = require_history_before
 
     @staticmethod
     def ensure_simulation_floor(candidates: tuple[MagnitudeCandidate, ...]) -> None:
@@ -135,6 +156,8 @@ class SimulatorRuntime:
             state=self._state,
             baseline=self._baseline,
             policy_id=policy_id,
+            committed_history=self._committed_history,
+            require_history_before=self._require_history_before,
         )
 
     def build_request(

@@ -37,6 +37,7 @@ from datetime import date
 
 from aios.cases.contract import Case
 from aios.evaluation.canonical import JsonValue
+from aios.execution.history import CommittedHistory, CommittedHistoryError
 from aios.mas.common import CandidateKind
 from aios.mas.invariants import (
     canonical_control_digest,
@@ -148,11 +149,22 @@ def compile_candidate_schedule(
     state: FieldState,
     baseline: Schedule,
     policy_id: str | None = None,
+    committed_history: CommittedHistory | None = None,
+    require_history_before: date | None = None,
 ) -> CompiledCandidateSchedule:
     """Скомпилировать кандидата в complete schedule управляемого окна.
 
     ``policy_id`` попадает в шапку сгенерированного файла; по умолчанию
     выводится из вида кандидата, поэтому одинаковый вход даёт одинаковый текст.
+
+    ``committed_history`` -- неизменяемая история управлений предыдущих эпох.
+    Кандидат владеет только ``[effective_date, H]``: всё, что раньше, выписывается
+    из истории и кандидатом не переписывается. Пустая история means первая
+    эпоха -- тогда префиксом остаётся baseline окна.
+
+    ``require_history_before`` -- дата, до которой история обязана существовать.
+    Шаг ``N > 0`` без истории -- это молчаливый откат к исходному baseline, и он
+    закрывается отказом, а не тихо принимается.
     """
     canonical = candidate.canonical()
     grid = baseline.canonical().dates
@@ -177,29 +189,59 @@ def compile_candidate_schedule(
     canonical_control_snapshot(canonical.producers, canonical.injectors)
 
     baseline_producers, baseline_injectors = _validated_baseline_controls(state)
+    history = committed_history if committed_history is not None else CommittedHistory()
+
+    if require_history_before is not None and not history.before(require_history_before):
+        raise CommittedHistoryError(
+            "compile_candidate_schedule: an epoch after the first requires committed history "
+            f"before {require_history_before.isoformat()}; falling back to the window baseline "
+            "would silently discard the policy already in force"
+        )
+
+    # Управления, реально стоящие в момент действия: до первого коммита это
+    # baseline окна, после -- последний закоммиченный интервал. Именно против
+    # них проверяется HOLD, и именно на них накладывается не-HOLD кандидат.
+    in_force_producers, in_force_injectors = history.controls_in_force_at(
+        canonical.effective_date,
+        baseline_producers=baseline_producers,
+        baseline_injectors=baseline_injectors,
+    )
 
     if canonical.candidate_kind is CandidateKind.HOLD:
-        held_producers = canonical.producers or baseline_producers
-        held_injectors = canonical.injectors or baseline_injectors
+        held_producers = canonical.producers or in_force_producers
+        held_injectors = canonical.injectors or in_force_injectors
         require_hold_carry_forward(
-            previous_producers=baseline_producers,
-            previous_injectors=baseline_injectors,
+            previous_producers=in_force_producers,
+            previous_injectors=in_force_injectors,
             held_producers=held_producers,
             held_injectors=held_injectors,
         )
         action_producers, action_injectors = held_producers, held_injectors
-    else:
+    elif canonical.candidate_kind is CandidateKind.DETERMINISTIC_BASELINE:
+        # Опорная политика применяется ОТ текущей эпохи: её численный источник
+        # -- baseline окна, но история до эпохи остаётся неизменной.
         action_producers = _merge_controls(baseline_producers, canonical.producers)
         action_injectors = _merge_controls(baseline_injectors, canonical.injectors)
+    else:
+        action_producers = _merge_controls(in_force_producers, canonical.producers)
+        action_injectors = _merge_controls(in_force_injectors, canonical.injectors)
 
+    # Композитное расписание: закоммиченная история на [T0, effective_date),
+    # затем управления кандидата. История выписывается явно на своих датах --
+    # неизменённые режимы обязаны быть представлены в файле, а не угаданы.
+    committed_by_date = {
+        item.effective_date: (item.producers, item.injectors)
+        for item in history.before(canonical.effective_date)
+    }
     steps: list[ScheduleStep] = []
     for day in grid:
         if day == canonical.effective_date:
             steps.append(ScheduleStep(day, action_producers, action_injectors))
+        elif day in committed_by_date:
+            committed_producers, committed_injectors = committed_by_date[day]
+            steps.append(ScheduleStep(day, committed_producers, committed_injectors))
         elif day == grid[0]:
-            # Окно открылось раньше действия: явный carry-forward фонда,
-            # чтобы неизменённые режимы были представлены в файле, а не
-            # угаданы читателем расписания.
+            # Окно открылось раньше действия: явный carry-forward фонда.
             steps.append(ScheduleStep(day, baseline_producers, baseline_injectors))
         else:
             steps.append(ScheduleStep(day))

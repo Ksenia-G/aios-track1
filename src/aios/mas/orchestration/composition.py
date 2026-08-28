@@ -100,14 +100,39 @@ class OpmRealizedStateExtractor:
     baseline: Schedule
     geology: GeologyContext | None = None
     extractor: StateExtractor = None  # type: ignore[assignment]
+    decision_epochs: tuple[date, ...] = ()
+    schedule_provider: object | None = None
+
+    def _next_epoch_date(self, effective_date: date) -> date | None:
+        """Дата, на которую снимается состояние ПОСЛЕ этой эпохи.
+
+        Многошаговый прогон: следующая когнитивная карта обязана быть снята на
+        следующей эпохе решения, а не в конце горизонта -- иначе после первого
+        же шага решать было бы уже не о чем. Одношаговый прогон эпох не
+        объявляет, и поведение остаётся прежним (последний отчётный шаг).
+        """
+        epochs = tuple(self.decision_epochs)
+        if effective_date not in epochs:
+            return None
+        index = epochs.index(effective_date)
+        return epochs[index + 1] if index + 1 < len(epochs) else None
 
     def extract(self, candidate: MagnitudeCandidate, execution: RuntimeExecution) -> StateCard:
         run_label = execution.provenance.candidate_digest
         summary = self.locator.read_summary(run_label, self.case.history.data_path.stem)
+        effective_date = candidate.canonical().effective_date
+        next_epoch = self._next_epoch_date(effective_date)
+        state_date = next_epoch if next_epoch is not None else effective_date
+        # Режимы, стоящие в state_date, читаются из расписания ИМЕННО этого
+        # кандидата: опорное расписание окна после первой эпохи уже не
+        # описывает того, что реально стоит.
+        schedule = self.baseline
+        if self.schedule_provider is not None:
+            schedule = self.schedule_provider(candidate).schedule
         controls = well_controls_from_schedule(
             self.initial_state,
-            self.baseline,
-            at_date=candidate.canonical().effective_date,
+            schedule,
+            at_date=state_date,
         )
         extractor = self.extractor if self.extractor is not None else StateExtractor()
         return extractor.extract(
@@ -122,7 +147,20 @@ class OpmRealizedStateExtractor:
             schedule_hash=execution.provenance.schedule_sha256,
             well_controls=controls,
             geology=self.geology,
+            step=_report_step_for(summary, next_epoch),
         )
+
+
+def _report_step_for(summary, moment: date | None) -> int:
+    """Индекс отчётного шага на дату ``moment``; -1 -- конец горизонта."""
+    if moment is None:
+        return -1
+    for index, stamp in enumerate(summary.dates):
+        if stamp.date() == moment:
+            return index
+    raise CompositionError(
+        f"realized_state: report step {moment.isoformat()} is absent from the run summary"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +243,7 @@ def build_real_closed_loop(
     simulator: object | None = None,
     guardian: object | None = None,
     geology: GeologyContext | None = None,
+    decision_epochs: tuple[date, ...] = (),
     mode: ExecutionMode = ExecutionMode.FULL,
     restart_date: date | None = None,
     policy_id: str | None = None,
@@ -257,6 +296,8 @@ def build_real_closed_loop(
         initial_state=initial_state,
         baseline=baseline,
         geology=geology,
+        decision_epochs=tuple(decision_epochs),
+        schedule_provider=runtime.compile,
     )
     return RealClosedLoopComposition(
         runtime=runtime,
