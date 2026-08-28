@@ -111,9 +111,17 @@ def _endpoint(config: ProviderConfig) -> str:
 def _payload(
     config: ProviderConfig, prompt: str, response_schema: Mapping[str, Any] | None
 ) -> dict[str, Any]:
+    # OpenAI's chat completions endpoint rejects `max_tokens` for current
+    # models and requires `max_completion_tokens` instead; Anthropic's
+    # Messages API still requires `max_tokens`. The two APIs disagree on the
+    # field name, not on the semantics, so the branch stays local to this one
+    # key rather than duplicating the whole payload per kind.
+    token_field = (
+        "max_completion_tokens" if config.kind is ProviderKind.OPENAI_COMPATIBLE else "max_tokens"
+    )
     payload: dict[str, Any] = {
         "model": config.model_id,
-        "max_tokens": config.max_tokens,
+        token_field: config.max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
     if config.temperature is not None:

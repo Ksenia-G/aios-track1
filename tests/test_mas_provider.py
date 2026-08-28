@@ -526,6 +526,27 @@ def test_absent_schema_leaves_the_legacy_request_unchanged() -> None:
     assert "reasoning_effort" not in payload
 
 
+def test_openai_compatible_requests_max_completion_tokens_not_max_tokens() -> None:
+    """OpenAI's chat completions endpoint rejects `max_tokens` for current
+    models (HTTP 400 unsupported_parameter) and requires
+    `max_completion_tokens` instead."""
+    transport = _ScriptedTransport((200, _openai_body("plain text")))
+    LiveTextCompletionProvider(config=_structured_config(), transport=transport).complete("p")
+    payload = transport.calls[0]["payload"]
+    assert "max_tokens" not in payload
+    assert payload["max_completion_tokens"] == _structured_config().max_tokens
+
+
+def test_anthropic_still_requests_max_tokens() -> None:
+    """Anthropic's Messages API requires `max_tokens`; only OpenAI-compatible
+    transport needs the renamed field."""
+    transport = _ScriptedTransport((200, _anthropic_body("hi")))
+    LiveTextCompletionProvider(config=_config(), transport=transport).complete("p")
+    payload = transport.calls[0]["payload"]
+    assert "max_completion_tokens" not in payload
+    assert payload["max_tokens"] == _config().max_tokens
+
+
 def test_schema_request_serialises_the_openai_compatible_shape() -> None:
     from aios.mas.providers import production_response_schema
 
