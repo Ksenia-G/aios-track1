@@ -136,6 +136,51 @@ _REALLOCATION_TRANSFER_FRACTIONS: dict[Intensity, MagnitudeAnchor] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Producer offtake reduction: target = previous_rate * factor.
+# Formula provenance: identical to the uplift branch -- the same
+# `min(rate * factor, ceiling)` arithmetic, where the ceiling cannot bind.
+# Grid provenance: experiments/exp005/results.json. EXP-005 mirrored the
+# decrease magnitudes EXP-004 had already tested on the injection axis
+# (A_INJ_090/080/060) onto the producer axis, so no new magnitude was invented
+# -- only the axis was new. Every point ran a full OPM horizon and passed the
+# official Guardian on both the whole-field arm and the targeted-subset arm.
+#
+# The anchor fixes what a reduction IS, not what it earns: EXP-005 measured the
+# same factor costing ~11x more NPV applied field-wide than applied to the six
+# wettest producers. The economic consequence stays the job of OPM and CHDD.
+# ---------------------------------------------------------------------------
+
+_PRODUCER_REDUCTION_FACTORS: dict[Intensity, MagnitudeAnchor] = {
+    Intensity.SMALL: MagnitudeAnchor(
+        value=0.90,
+        source_experiment="EXP-005",
+        source_case="EXP005_G_PROD_RED_090 / EXP005_S_PROD_RED_090",
+        note=(
+            "Smallest tested producer reduction; mirrors EXP004_A_INJ_090 and the "
+            "+10% step of EXP004_B_PROD_110. Guardian PASS on both arms."
+        ),
+    ),
+    Intensity.MODERATE: MagnitudeAnchor(
+        value=0.80,
+        source_experiment="EXP-005",
+        source_case="EXP005_G_PROD_RED_080 / EXP005_S_PROD_RED_080",
+        note=(
+            "Mid tested producer reduction; mirrors EXP004_A_INJ_080. Guardian PASS on both arms."
+        ),
+    ),
+    Intensity.AGGRESSIVE: MagnitudeAnchor(
+        value=0.60,
+        source_experiment="EXP-005",
+        source_case="EXP005_G_PROD_RED_060 / EXP005_S_PROD_RED_060",
+        note=(
+            "Maximum tested producer reduction; mirrors EXP004_A_INJ_060. "
+            "Guardian PASS on both arms."
+        ),
+    ),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class ModelYEmpiricalMagnitudeProfile:
     """Единственная production empirical magnitude profile для MR-001.
@@ -150,6 +195,9 @@ class ModelYEmpiricalMagnitudeProfile:
 
     def producer_uplift_factor(self, intensity: Intensity) -> MagnitudeAnchor | None:
         return _PRODUCER_UPLIFT_FACTORS.get(Intensity(intensity))
+
+    def producer_reduction_factor(self, intensity: Intensity) -> MagnitudeAnchor | None:
+        return _PRODUCER_REDUCTION_FACTORS.get(Intensity(intensity))
 
     def injection_scale_factor(
         self, intensity: Intensity, *, direction_up: bool

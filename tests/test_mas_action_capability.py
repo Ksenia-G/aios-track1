@@ -41,11 +41,20 @@ def test_executable_production_actions_match_the_resolver_branches() -> None:
 
 
 def test_reduce_offtake_is_masked_while_it_has_no_anchor() -> None:
-    """The diagnosed failure: an action the resolver cannot materialise."""
-    assert ProductionAction.REDUCE_OFFTAKE not in supported_production_actions()
-    capability = _capability(
-        production_capabilities(ModelYEmpiricalMagnitudeProfile()), ProductionAction.REDUCE_OFFTAKE
-    )
+    """The diagnosed failure: an action the resolver cannot materialise.
+
+    EXP-005 has since supplied the anchor, so the pre-EXP-005 condition is
+    reproduced with an anchorless profile. The mask logic is what is under
+    test, not the momentary contents of the shipped profile.
+    """
+
+    class ProfileWithoutReduction(ModelYEmpiricalMagnitudeProfile):
+        def producer_reduction_factor(self, intensity: Intensity) -> MagnitudeAnchor | None:
+            return None
+
+    profile = ProfileWithoutReduction()
+    assert ProductionAction.REDUCE_OFFTAKE not in supported_production_actions(profile)
+    capability = _capability(production_capabilities(profile), ProductionAction.REDUCE_OFFTAKE)
     assert capability.executable is False
     assert "no empirical reduction anchor" in capability.reason
 
@@ -127,7 +136,9 @@ def test_benchmark_offers_only_executable_actions() -> None:
 
     assert set(PRODUCTION_ACTIONS) <= set(supported_production_actions())
     assert set(INJECTION_ACTIONS) <= set(supported_injection_actions())
-    assert ProductionAction.REDUCE_OFFTAKE not in PRODUCTION_ACTIONS
+    # Nothing the resolver cannot materialise is ever offered.
+    assert ProductionAction.REBALANCE_WITHIN_BLOCK not in PRODUCTION_ACTIONS
+    assert InjectionAction.REBALANCE_ACROSS_BLOCKS not in INJECTION_ACTIONS
 
 
 def test_benchmark_action_lists_are_derived_not_literal() -> None:
@@ -242,3 +253,104 @@ def test_action_capability_is_serialisable_for_provenance() -> None:
     body = capability.to_json()
     assert set(body) == {"action", "executable", "reason"}
     assert dataclasses.is_dataclass(capability)
+
+
+# ---------------------------------------------------------------------------
+# EXP-005: the reduction anchor, and the action it re-enables.
+# ---------------------------------------------------------------------------
+
+
+def test_reduction_anchors_are_the_exp005_tested_points() -> None:
+    """Anchors are tested grid points, never interpolated or chosen freehand."""
+    profile = ModelYEmpiricalMagnitudeProfile()
+    expected = {Intensity.SMALL: 0.90, Intensity.MODERATE: 0.80, Intensity.AGGRESSIVE: 0.60}
+    for intensity, value in expected.items():
+        anchor = profile.producer_reduction_factor(intensity)
+        assert anchor is not None
+        assert anchor.value == pytest.approx(value)
+        assert anchor.source_experiment == "EXP-005"
+        assert "EXP005_" in anchor.source_case
+
+
+def test_reduction_anchors_mirror_the_injection_decrease_grid() -> None:
+    """The magnitudes are the ones this project had already tested."""
+    profile = ModelYEmpiricalMagnitudeProfile()
+    for intensity in (Intensity.SMALL, Intensity.MODERATE, Intensity.AGGRESSIVE):
+        reduction = profile.producer_reduction_factor(intensity)
+        injection = profile.injection_scale_factor(intensity, direction_up=False)
+        assert reduction.value == pytest.approx(injection.value)
+
+
+def test_intensity_none_still_has_no_reduction_anchor() -> None:
+    assert ModelYEmpiricalMagnitudeProfile().producer_reduction_factor(Intensity.NONE) is None
+
+
+def test_reduce_offtake_is_now_executable() -> None:
+    assert ProductionAction.REDUCE_OFFTAKE in supported_production_actions()
+    capability = _capability(
+        production_capabilities(ModelYEmpiricalMagnitudeProfile()), ProductionAction.REDUCE_OFFTAKE
+    )
+    assert capability.executable is True
+
+
+def test_every_exp005_grid_point_passed_guardian() -> None:
+    """The recorded evidence, not a claim about it."""
+    import json
+    from pathlib import Path
+
+    payload = json.loads(Path("experiments/exp005/results.json").read_text(encoding="utf-8"))
+    assert len(payload["results"]) == 6
+    assert {r["arm"] for r in payload["results"]} == {"G", "S"}
+    assert {r["factor"] for r in payload["results"]} == {0.90, 0.80, 0.60}
+    for record in payload["results"]:
+        assert record["status"] == "OK"
+        assert record["guardian"] == "PASS"
+        assert record["guardian_failed"] == 0
+
+
+def test_recorded_evidence_shows_the_target_dependence() -> None:
+    """The anchor fixes the magnitude; the economics remain target-dependent.
+
+    Pinning this keeps the caveat from being quietly forgotten: the same factor
+    cost roughly an order of magnitude more NPV field-wide than on the six
+    wettest producers.
+    """
+    import json
+    from pathlib import Path
+
+    payload = json.loads(Path("experiments/exp005/results.json").read_text(encoding="utf-8"))
+    baseline = 1030.8776958837277
+    by_arm = {(r["arm"], r["factor"]): r["npv_mln_rub"] for r in payload["results"]}
+    for factor in (0.90, 0.80, 0.60):
+        global_delta = abs(by_arm[("G", factor)] - baseline)
+        subset_delta = abs(by_arm[("S", factor)] - baseline)
+        assert global_delta > subset_delta * 5
+
+
+def test_reduce_offtake_resolves_to_a_numerical_candidate() -> None:
+    """The whole point: a REDUCE_OFFTAKE intent now reaches real controls."""
+    from dataclasses import replace as dc_replace
+
+    from aios.mas.common import Direction, UncertaintyLevel
+    from aios.mas.intents import ProductionIntent
+    from aios.mas.magnitude_resolution.engine import DeterministicMagnitudeResolver
+    from aios.schedule import ProducerControl, WellStatus
+
+    intent = ProductionIntent(
+        action=ProductionAction.REDUCE_OFFTAKE,
+        direction=Direction.DOWN,
+        intensity=Intensity.MODERATE,
+        target_wells=("P1",),
+        target_regions=(),
+        evidence_ids=("ev-1",),
+        uncertainty=UncertaintyLevel.MEDIUM,
+        rationale_short="Water cut evidence supports cutting offtake.",
+    )
+    control = ProducerControl(well="P1", status=WellStatus.OPEN, mode="LRAT", liquid_rate=200.0)
+    controls = {"P1": control}
+    resolver = DeterministicMagnitudeResolver.__new__(DeterministicMagnitudeResolver)
+    object.__setattr__(resolver, "_profile", ModelYEmpiricalMagnitudeProfile())
+    object.__setattr__(resolver, "_context", None)
+    resolver._apply_production_intent(intent, controls, set())
+    assert controls["P1"].liquid_rate == pytest.approx(160.0)  # 200 * 0.80
+    assert dc_replace(control, liquid_rate=160.0) == controls["P1"]

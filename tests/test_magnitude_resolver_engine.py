@@ -589,8 +589,14 @@ def test_m13_unknown_target_well_fails_closed() -> None:
 
 
 def test_m14_m15_m16_unsupported_action_fails_closed_not_hold_or_baseline() -> None:
+    # REDUCE_OFFTAKE used to be the example here; EXP-005 gave it an anchor, so
+    # the invariant is now demonstrated with an action that is still genuinely
+    # unresolvable. What is under test is unchanged: an unsupported action is
+    # dropped, and the HOLD/baseline floor is neither crashed nor substituted.
     envelope = _build_envelope(
-        production_primary_intents=(_production_reduce(target_wells=("P1",)),)
+        production_primary_intents=(
+            _production_rebalance(target_wells=("P1", "P2"), target_regions=("B1",)),
+        )
     )
     resolver = DeterministicMagnitudeResolver(context=_context(envelope))
     bundle = _decision_bundle_for(envelope, CandidateKind.AGENT_BUNDLE, use_primary=True)

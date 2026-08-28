@@ -214,6 +214,22 @@ class DeterministicMagnitudeResolver:
                 new_rate = min(previous_rate * anchor.value, TRACK1_WLPR_HARD_MAX)
                 controls_by_well[well] = replace(previous, liquid_rate=new_rate)
             return
+        if action is ProductionAction.REDUCE_OFFTAKE:
+            anchor = self._profile.producer_reduction_factor(intent.intensity)
+            if anchor is None:
+                raise MagnitudeResolutionError(
+                    f"REDUCE_OFFTAKE: no empirical anchor for intensity {intent.intensity}"
+                )
+            for well in intent.target_wells:
+                previous = self._require_untouched_control(
+                    well, controls_by_well, touched, "production"
+                )
+                previous_rate = previous.liquid_rate or 0.0
+                # Тот же множитель, что и на подъёме; потолок здесь связать не
+                # может, но арифметика остаётся одной и той же.
+                new_rate = min(previous_rate * anchor.value, TRACK1_WLPR_HARD_MAX)
+                controls_by_well[well] = replace(previous, liquid_rate=new_rate)
+            return
         if action is ProductionAction.SHUT_IN:
             for well in intent.target_wells:
                 previous = self._require_untouched_control(
