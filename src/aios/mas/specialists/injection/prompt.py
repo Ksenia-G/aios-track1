@@ -12,8 +12,9 @@ from aios.mas.envelopes import InjectionEnvelope
 from aios.mas.intents import InjectionAction
 from aios.mas.invariants import require_no_baseline_field
 from aios.mas.specialists.injection.evidence_builder import EvidenceBuilder
+from aios.mas.specialists.injection.scope import state_card_regions
 
-PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.1.0"
+PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.2.0"
 
 #: Полевые правила каждого действия, как их проверяет замороженный
 #: `InjectionIntent.__post_init__`.
@@ -55,6 +56,25 @@ _ACTION_FIELD_CONTRACTS: dict[str, str] = {
     "ALL_NON_HOLD": "cite at least one existing evidence_id; never emit a numerical magnitude",
 }
 
+#: Те же два действия на снимке БЕЗ известных блоков. Они принимают скважины
+#: ИЛИ регионы, поэтому исчезновение region-действий из allowed_actions их не
+#: закрывает: контракт всё ещё предлагал бы region-вариант, и живой провайдер
+#: честно им пользовался -- ответ отвергал ScopeAuditor, а специалист падал в
+#: DETERMINISTIC_FALLBACK. Регионы здесь не выдумываются: они просто перестают
+#: предлагаться, пока StateCard их не знает.
+_WELLS_ONLY_ACTION_FIELD_CONTRACTS: dict[str, str] = {
+    "SUPPORT_REGION": (
+        "targeted increase. direction UP; qualitative intensity; "
+        "recipient_wells required. This StateCard exposes no geological blocks, "
+        "so source_regions and target_regions MUST stay empty"
+    ),
+    "REDUCE_SUPPORT_PATH": (
+        "targeted decrease. direction DOWN; qualitative intensity; "
+        "donor_wells required. This StateCard exposes no geological blocks, "
+        "so source_regions and target_regions MUST stay empty"
+    ),
+}
+
 
 class PromptBuildError(ValueError):
     """Промпт из envelope собрать нельзя."""
@@ -69,6 +89,11 @@ class PromptBuilder:
         if not isinstance(envelope, InjectionEnvelope):
             raise PromptBuildError(f"expected InjectionEnvelope, got {type(envelope).__name__}")
         require_no_baseline_field(envelope)
+        # Заземляемость решает StateCard, а не вкус промпта: пока блоков нет,
+        # region-вариант не предлагается ни одним каналом.
+        contracts = dict(_ACTION_FIELD_CONTRACTS)
+        if not state_card_regions(envelope.state_card):
+            contracts.update(_WELLS_ONLY_ACTION_FIELD_CONTRACTS)
         payload = {
             "prompt_builder_version": self.version,
             "role": "INJECTION",
@@ -86,7 +111,7 @@ class PromptBuilder:
             # модель к действию, которого ей всё равно не разрешили.
             "action_field_contracts": {
                 name: rule
-                for name, rule in _ACTION_FIELD_CONTRACTS.items()
+                for name, rule in contracts.items()
                 if name == "ALL_NON_HOLD"
                 or name in {str(action) for action in envelope.allowed_actions}
             },

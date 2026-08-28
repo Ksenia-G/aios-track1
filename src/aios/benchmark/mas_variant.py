@@ -45,6 +45,7 @@ from aios.mas.orchestration import (
     build_real_closed_loop,
 )
 from aios.mas.specialists.injection import InjectionController
+from aios.mas.specialists.injection.scope import groundable_injection_actions
 from aios.mas.specialists.production import ProductionController
 
 #: Действия, доступные специалистам в бенчмарке. Одинаковы для OFF и ON.
@@ -56,6 +57,18 @@ from aios.mas.specialists.production import ProductionController
 #: пятью живыми Production-предложениями в MAS-PERF-001.
 PRODUCTION_ACTIONS = supported_production_actions()
 INJECTION_ACTIONS = supported_injection_actions()
+
+
+def injection_actions_for_state(state_card) -> tuple:
+    """Исполнимые Injection-действия, ЗАЗЕМЛЯЕМЫЕ против конкретного снимка.
+
+    `supported_injection_actions()` отбирает по одному признаку -- умеет ли
+    резолвер превратить действие в числа. Этого мало: реальный StateCard
+    приходит с пустым `geology.block_membership`, и region-действие, которое
+    резолвер собрать умеет, ScopeAuditor всё равно отвергает. Второй фильтр
+    берётся у самого аудитора, а не собирается здесь заново.
+    """
+    return groundable_injection_actions(state_card, INJECTION_ACTIONS)
 
 
 @dataclass
@@ -215,7 +228,7 @@ def run_mas_variant(
         horizon_context=horizon,
         memory_slice=MemorySlice(),
         production_allowed_actions=PRODUCTION_ACTIONS,
-        injection_allowed_actions=INJECTION_ACTIONS,
+        injection_allowed_actions=injection_actions_for_state(initial_state_card),
         **diagnostics,
     )
 
@@ -293,4 +306,9 @@ def run_mas_variant(
     )
 
 
-__all__ = ["INJECTION_ACTIONS", "PRODUCTION_ACTIONS", "run_mas_variant"]
+__all__ = [
+    "INJECTION_ACTIONS",
+    "PRODUCTION_ACTIONS",
+    "injection_actions_for_state",
+    "run_mas_variant",
+]

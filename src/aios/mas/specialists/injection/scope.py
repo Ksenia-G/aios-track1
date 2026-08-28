@@ -3,6 +3,12 @@
 Injection Controller читает StateCard, но не ставит setpoints. Wells и
 блоки в intents обязаны существовать в текущем снимке; donor/recipient --
 только нагнетатели.
+
+Здесь же живёт обратная сторона той же границы: какие действия вообще имеет
+смысл ПРЕДЛАГАТЬ специалисту на данном снимке. Правило заземления региона
+одно, и держать его в одном модуле обязательно: список допустимых действий,
+собранный отдельно от аудитора, разошёлся бы с ним при первом же изменении и
+приглашал бы модель в заведомо отвергаемый ответ.
 """
 
 from __future__ import annotations
@@ -10,12 +16,50 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from aios.mas.envelopes import InjectionEnvelope
-from aios.mas.intents import InjectionIntent
-from aios.state import WellRole, WellStateSnapshot
+from aios.mas.intents import InjectionAction, InjectionIntent
+from aios.state import StateCard, WellRole, WellStateSnapshot
+
+#: Действия, чей замороженный контракт ТРЕБУЕТ region-поля (см.
+#: `InjectionIntent.__post_init__`): без известных блоков они неисполнимы, и
+#: предлагать их -- значит приглашать провайдера в заведомо отвергаемый ответ.
+REGION_REQUIRED_ACTIONS = frozenset(
+    {
+        InjectionAction.REALLOCATE_INJECTION,
+        InjectionAction.REBALANCE_ACROSS_BLOCKS,
+    }
+)
 
 
 class ScopeError(ValueError):
     """Intent ссылается на скважину или регион вне текущего StateCard."""
+
+
+def state_card_regions(state_card: StateCard) -> frozenset[str]:
+    """Блоки, против которых вообще можно заземлить region-цель."""
+    return frozenset(dict(state_card.geology.block_membership).values())
+
+
+def groundable_injection_actions(
+    state_card: StateCard, actions: Sequence[InjectionAction]
+) -> tuple[InjectionAction, ...]:
+    """Подмножество `actions`, заземляемое против текущего StateCard.
+
+    Ничего не выдумывает: при известных блоках список возвращается как есть.
+    Пустой `block_membership` -- это не повод сочинить членство, а повод не
+    предлагать действия, которые без него не собираются.
+    """
+    if state_card_regions(state_card):
+        return tuple(actions)
+    return tuple(action for action in actions if action not in REGION_REQUIRED_ACTIONS)
+
+
+__all__ = [
+    "REGION_REQUIRED_ACTIONS",
+    "ScopeAuditor",
+    "ScopeError",
+    "groundable_injection_actions",
+    "state_card_regions",
+]
 
 
 class ScopeAuditor:
