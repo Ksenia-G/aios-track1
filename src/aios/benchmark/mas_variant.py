@@ -280,8 +280,14 @@ def _baseline_controls(state):
 def _diagnostics(state_card) -> dict[str, EvidenceArtifact]:
     """Настоящая детерминированная диагностика шага."""
     from aios.diagnostics import PressureDiagnostic, SweepDiagnostic
+    from aios.diagnostics.support import (
+        CONNECTIVITY_VERSION,
+        IMBALANCE_VERSION,
+        derive_support_connectivity,
+        derive_support_imbalance,
+    )
 
-    return {
+    diagnostics = {
         "pressure_diagnostic": EvidenceArtifact(
             evidence_id="benchmark.pressure",
             kind="pressure_diagnostic",
@@ -293,6 +299,26 @@ def _diagnostics(state_card) -> dict[str, EvidenceArtifact]:
             payload=SweepDiagnostic().propose(state_card).to_json(),
         ),
     }
+    # Связность и дисбаланс поддержки едут по существующим типизированным
+    # слотам evidence, а не отдельным текстовым блоком в промпте. Пустая
+    # геология даёт пустую диагностику, а не выдуманные связи.
+    connectivity = derive_support_connectivity(wells=state_card.wells, geology=state_card.geology)
+    if connectivity.links:
+        diagnostics["geology_card"] = EvidenceArtifact(
+            evidence_id="benchmark.support_connectivity",
+            kind="support_connectivity",
+            payload=connectivity.to_json(),
+            source_version=CONNECTIVITY_VERSION,
+        )
+    imbalance = derive_support_imbalance(wells=state_card.wells, geology=state_card.geology)
+    if imbalance.scopes:
+        diagnostics["response_map"] = EvidenceArtifact(
+            evidence_id="benchmark.support_imbalance",
+            kind="regional_support_imbalance",
+            payload=imbalance.to_json(),
+            source_version=IMBALANCE_VERSION,
+        )
+    return diagnostics
 
 
 def run_mas_variant(
