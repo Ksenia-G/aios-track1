@@ -12,6 +12,7 @@ MAS OFF и MAS ON отличаются ровно одним -- состояни
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -137,6 +138,68 @@ def _carry_forward(resolver: _ContextualMagnitudeResolver, committed) -> None:
     """
     resolver.previous_producers = tuple(committed.producers)
     resolver.previous_injectors = tuple(committed.injectors)
+
+
+@dataclass(frozen=True, slots=True)
+class GuardianTelemetry:
+    """Что Guardian реально сделал за прогон варианта.
+
+    Контрактные поля (`committed_*`) описывают ПРИНЯТУЮ политику и потому
+    сопоставимы с опорными вариантами, где кандидат ровно один. Поиск-широкие
+    поля описывают весь перебор: Guardian выполняется по каждому кандидату, и
+    отказ отклонённого кандидата -- это выполненная работа, а не её отсутствие.
+    """
+
+    checks_total: int = 0
+    failed_total: int = 0
+    candidates_evaluated: int = 0
+    candidates_rejected: int = 0
+    committed_checks: int = 0
+    committed_failed: int = 0
+
+
+def _verdict_summary(verdict) -> dict | None:
+    """Сводка ConstraintReport из вердикта, если Guardian по нему отработал.
+
+    `GuardianVerdict.report` -- это уже сериализованный отчёт (dict); проверять
+    на dict сам вердикт бессмысленно, и именно эта ошибка обнуляла счётчики.
+    """
+    if verdict is None:
+        return None
+    report = getattr(verdict, "report", None)
+    if not isinstance(report, Mapping):
+        return None
+    summary = report.get("summary")
+    return summary if isinstance(summary, Mapping) else None
+
+
+def guardian_telemetry(results) -> GuardianTelemetry:
+    """Собрать телеметрию Guardian по шагам решения."""
+    checks = failed = evaluated = rejected = 0
+    committed_checks = committed_failed = 0
+    for result in results:
+        for record in result.candidates:
+            summary = _verdict_summary(record.guardian)
+            if summary is None:
+                continue
+            total = int(summary.get("total_checks", 0))
+            step_failed = int(summary.get("failed", 0))
+            checks += total
+            failed += step_failed
+            evaluated += 1
+            if step_failed:
+                rejected += 1
+            if record.candidate_digest == result.committed_candidate_digest:
+                committed_checks += total
+                committed_failed += step_failed
+    return GuardianTelemetry(
+        checks_total=checks,
+        failed_total=failed,
+        candidates_evaluated=evaluated,
+        candidates_rejected=rejected,
+        committed_checks=committed_checks,
+        committed_failed=committed_failed,
+    )
 
 
 def _committed_action_controls(runtime, candidate):
@@ -335,14 +398,7 @@ def run_mas_variant(
         for result in results
     )
     committed = final.committed_candidate.canonical()
-    guardian_failed = sum(
-        1
-        for result in results
-        for record in result.candidates
-        if record.guardian
-        and not record.guardian.passed
-        and record.candidate_digest == result.committed_candidate_digest
-    )
+    guardian = guardian_telemetry(results)
 
     manifest = BenchmarkRunManifest(
         benchmark_schema_version=BENCHMARK_SCHEMA_VERSION,
@@ -370,16 +426,13 @@ def run_mas_variant(
     return BenchmarkOutcome(
         manifest=manifest,
         npv_mln_rub=selected.chdd.result.npv_mln_rub,
-        guardian_pass=guardian_failed == 0,
-        guardian_check_count=sum(
-            record.guardian.report["summary"]["total_checks"]
-            if isinstance(record.guardian, dict)
-            else 0
-            for result in results
-            for record in result.candidates
-            if record.guardian is not None
-        ),
-        guardian_failed_count=guardian_failed,
+        guardian_pass=guardian.committed_failed == 0,
+        guardian_check_count=guardian.committed_checks,
+        guardian_failed_count=guardian.committed_failed,
+        guardian_checks_total=guardian.checks_total,
+        guardian_failed_total=guardian.failed_total,
+        guardian_candidates_evaluated=guardian.candidates_evaluated,
+        guardian_candidates_rejected=guardian.candidates_rejected,
         simulation_count=simulation_count,
         control_change_count=len(committed.producers) + len(committed.injectors),
         decision_steps=len(results),
@@ -398,6 +451,8 @@ def run_mas_variant(
 __all__ = [
     "INJECTION_ACTIONS",
     "PRODUCTION_ACTIONS",
+    "GuardianTelemetry",
+    "guardian_telemetry",
     "injection_actions_for_state",
     "run_mas_variant",
 ]

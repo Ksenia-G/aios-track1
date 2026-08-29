@@ -274,6 +274,15 @@ class BenchmarkOutcome:
     guardian_pass: bool
     guardian_check_count: int = 0
     guardian_failed_count: int = 0
+    #: Телеметрия поиска: Guardian на многокандидатном варианте выполняется по
+    #: каждому кандидату, а не только по принятому. Отдельные поля нужны, чтобы
+    #: одно значение не означало сразу «проверки принятой политики» и «проверки
+    #: всего поиска»: контрактные счётчики выше описывают ПРИНЯТУЮ политику и
+    #: сопоставимы с опорными вариантами, где кандидат ровно один.
+    guardian_checks_total: int = 0
+    guardian_failed_total: int = 0
+    guardian_candidates_evaluated: int = 0
+    guardian_candidates_rejected: int = 0
     simulation_count: int = 0
     control_change_count: int = 0
     decision_steps: int = 0
@@ -287,7 +296,15 @@ class BenchmarkOutcome:
 
     def __post_init__(self) -> None:
         _require_finite(self.npv_mln_rub, "benchmark_outcome.npv_mln_rub")
-        if self.guardian_failed_count < 0 or self.guardian_check_count < 0:
+        negative = (
+            self.guardian_failed_count,
+            self.guardian_check_count,
+            self.guardian_checks_total,
+            self.guardian_failed_total,
+            self.guardian_candidates_evaluated,
+            self.guardian_candidates_rejected,
+        )
+        if any(value < 0 for value in negative):
             raise BenchmarkError("benchmark_outcome: guardian counters must be >= 0")
         if self.guardian_pass and self.guardian_failed_count:
             raise BenchmarkError(
@@ -319,6 +336,10 @@ class BenchmarkOutcome:
             "guardian_pass": self.guardian_pass,
             "guardian_check_count": self.guardian_check_count,
             "guardian_failed_count": self.guardian_failed_count,
+            "guardian_checks_total": self.guardian_checks_total,
+            "guardian_failed_total": self.guardian_failed_total,
+            "guardian_candidates_evaluated": self.guardian_candidates_evaluated,
+            "guardian_candidates_rejected": self.guardian_candidates_rejected,
             "simulation_count": self.simulation_count,
             "control_change_count": self.control_change_count,
             "decision_steps": self.decision_steps,
