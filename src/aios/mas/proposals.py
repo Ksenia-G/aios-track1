@@ -197,6 +197,38 @@ class InjectionProposal:
         return digest(self._semantic_payload())
 
 
+def _validate_injection_beam(
+    *,
+    primary: InjectionProposal,
+    baseline: InjectionProposal,
+    alternatives: tuple[InjectionProposal, ...],
+) -> None:
+    """Пучок обязан состоять из РАЗНЫХ структурных гипотез одного вызова.
+
+    Повтор primary/baseline внутри alternatives не добавил бы поиску ни одной
+    новой гипотезы, зато занял бы слот физического бюджета.
+    """
+    where = "injection_agent_output.alternatives"
+    seen = {primary.digest(), baseline.digest()}
+    for index, alternative in enumerate(alternatives):
+        if alternative.source is ProposalSource.DETERMINISTIC_BASELINE:
+            raise ProposalError(
+                f"{where}[{index}]: an alternative is a structural hypothesis, "
+                "not a second deterministic floor"
+            )
+        if alternative.envelope_digest != primary.envelope_digest:
+            raise ProposalError(
+                f"{where}[{index}]: every hypothesis must share the primary envelope_digest"
+            )
+        digest_ = alternative.digest()
+        if digest_ in seen:
+            raise ProposalError(
+                f"{where}[{index}]: duplicates an existing proposal; alternatives must "
+                "carry materially different structural hypotheses"
+            )
+        seen.add(digest_)
+
+
 def _validate_agent_output(
     *,
     primary: ProductionProposal | InjectionProposal,
@@ -226,14 +258,49 @@ class ProductionAgentOutput:
 
 @dataclass(frozen=True, slots=True)
 class InjectionAgentOutput:
-    """Итог одного вызова Injection-специалиста: primary + отдельный baseline."""
+    """Итог ОДНОГО вызова Injection-специалиста: пучок гипотез + baseline.
+
+    `alternatives` -- дополнительные СТРУКТУРНЫЕ гипотезы того же самого
+    вызова провайдера, а не отдельные обращения к модели. Одна гипотеза за
+    эпоху означала, что стохастический выбор действия мог на целую эпоху
+    выключить исправно работающую downstream-способность.
+
+    Ранг задаётся порядком: primary -- ранг 1, alternatives -- ранги 2..N.
+    Отдельного поля ранга нет намеренно: порядок кортежа уже детерминирован,
+    а второй источник той же правды разошёлся бы с ним.
+
+    Расширение аддитивное: пустой кортеж по умолчанию, и вызывающий, который
+    его не передаёт, ведёт себя ровно как раньше. Численных величин в этом
+    контракте нет и быть не может -- гипотезы структурные.
+    """
 
     primary_proposal: InjectionProposal
     baseline_proposal: InjectionProposal
+    alternatives: tuple[InjectionProposal, ...] = ()
+
+    def hypotheses(self) -> tuple[InjectionProposal, ...]:
+        """Структурные гипотезы пучка в порядке ранга. Baseline сюда не входит."""
+        return (self.primary_proposal, *self.alternatives)
+
+    def ranked_hypotheses(self) -> tuple[tuple[int, InjectionProposal], ...]:
+        """Пары (ранг, гипотеза), ранг начинается с 1."""
+        return tuple(enumerate(self.hypotheses(), start=1))
 
     def __post_init__(self) -> None:
+        _validate_injection_beam(
+            primary=self.primary_proposal,
+            baseline=self.baseline_proposal,
+            alternatives=self.alternatives,
+        )
         _validate_agent_output(
             primary=self.primary_proposal,
             baseline=self.baseline_proposal,
             where="injection_agent_output",
         )
+
+    def to_json(self) -> dict[str, JsonValue]:
+        return {
+            "primary_proposal": self.primary_proposal.to_json(),
+            "baseline_proposal": self.baseline_proposal.to_json(),
+            "alternatives": [item.to_json() for item in self.alternatives],
+        }

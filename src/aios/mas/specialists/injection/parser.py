@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from aios.mas.common import UncertaintyLevel
@@ -19,7 +20,11 @@ from aios.mas.specialists.injection.prescriptive import (
 )
 from aios.mas.specialists.injection.vocabulary import VocabularyError, VocabularyValidator
 
-_ALLOWED_TOP_LEVEL = frozenset({"intents"})
+_ALLOWED_TOP_LEVEL = frozenset({"intents", "hypotheses", "considered_actions"})
+
+#: Ключи записи «рассмотрено, но не поддержано». Численных величин здесь нет:
+#: это структурная видимость выбора, а не управление.
+_ALLOWED_CONSIDERED_KEYS = frozenset({"action", "supported", "reason"})
 _ALLOWED_INTENT_KEYS = frozenset(
     {
         "action",
@@ -45,20 +50,47 @@ class StrictOutputParser:
     """Разобрать JSON-ответ. All-or-nothing, без setpoint-полей."""
 
     def parse(self, text: str) -> tuple[InjectionIntent, ...]:
+        """Первая (rank-1) гипотеза. Прежний контракт вызывающих не меняется."""
+        beam = self.parse_beam(text)
+        return beam.hypotheses[0]
+
+    def parse_beam(self, text: str) -> InjectionBeam:
+        """Пучок структурных гипотез одного ответа провайдера.
+
+        Прежняя форма ответа (`{"intents": [...]}`) остаётся валидной и даёт
+        пучок из одной гипотезы: контракт расширяется, а не заменяется.
+        """
         payload = _load_object(text)
         extra = set(payload) - _ALLOWED_TOP_LEVEL
         if extra:
             raise ParseError(f"unexpected top-level keys {sorted(extra)}")
-        raw_intents = payload.get("intents")
-        if not isinstance(raw_intents, list) or not raw_intents:
-            raise ParseError("intents must be a non-empty list")
         validator = VocabularyValidator()
-        parsed: list[InjectionIntent] = []
-        for index, item in enumerate(raw_intents):
-            if not isinstance(item, dict):
-                raise ParseError(f"intents[{index}] must be an object")
-            parsed.append(_parse_intent(item, index, validator))
-        return tuple(parsed)
+
+        if "hypotheses" in payload:
+            raw_beam = payload["hypotheses"]
+            if not isinstance(raw_beam, list) or not raw_beam:
+                raise ParseError("hypotheses must be a non-empty list")
+            # Негодная ОТДЕЛЬНАЯ гипотеза отбрасывается поодиночке: она не
+            # имеет права уносить с собой годных соседей -- ради этого пучок
+            # и вводился. Ответ целиком, не давший ни одной годной гипотезы,
+            # остаётся fail-closed.
+            parsed_beam: list[tuple[InjectionIntent, ...]] = []
+            first_error: ParseError | None = None
+            for rank, item in enumerate(raw_beam):
+                try:
+                    parsed_beam.append(_parse_intents(item, f"hypotheses[{rank}].", validator))
+                except ParseError as error:
+                    first_error = first_error or error
+            if not parsed_beam:
+                raise first_error or ParseError("no hypothesis in the beam is parsable")
+            hypotheses = tuple(parsed_beam)
+        else:
+            hypotheses = (_parse_intents(payload, "", validator),)
+
+        return InjectionBeam(
+            hypotheses=hypotheses,
+            considered=_parse_considered(payload.get("considered_actions")),
+        )
 
 
 def _load_object(text: str) -> dict[str, Any]:
@@ -81,6 +113,71 @@ def _load_object(text: str) -> dict[str, Any]:
     if offender is not None:
         raise ParseError(f"prescriptive key {offender!r} is forbidden")
     return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ConsideredAction:
+    """Действие, которое модель рассмотрела явно."""
+
+    action: str
+    supported: bool
+    reason: str = ""
+
+    def label(self) -> str:
+        """Короткая auditable метка для ProposalAudit.declined_alternatives."""
+        state = "supported" if self.supported else "not_supported"
+        return (
+            f"{self.action}:{state}:{self.reason[:80]}"
+            if self.reason
+            else (f"{self.action}:{state}")
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InjectionBeam:
+    """Структурные гипотезы одного ответа провайдера, в порядке ранга."""
+
+    hypotheses: tuple[tuple[InjectionIntent, ...], ...]
+    considered: tuple[ConsideredAction, ...] = ()
+
+
+def _parse_intents(container, where: str, validator) -> tuple[InjectionIntent, ...]:
+    if not isinstance(container, dict):
+        raise ParseError(f"{where or 'response'} must be an object")
+    raw_intents = container.get("intents")
+    if not isinstance(raw_intents, list) or not raw_intents:
+        raise ParseError(f"{where or 'response'}.intents must be a non-empty list")
+    parsed: list[InjectionIntent] = []
+    for index, item in enumerate(raw_intents):
+        if not isinstance(item, dict):
+            raise ParseError(f"{where}intents[{index}] must be an object")
+        parsed.append(_parse_intent(item, index, validator))
+    return tuple(parsed)
+
+
+def _parse_considered(raw) -> tuple[ConsideredAction, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ParseError("considered_actions must be a list")
+    items: list[ConsideredAction] = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ParseError(f"considered_actions[{index}] must be an object")
+        unexpected = set(entry) - _ALLOWED_CONSIDERED_KEYS
+        if unexpected:
+            raise ParseError(f"considered_actions[{index}] unexpected keys {sorted(unexpected)}")
+        action = entry.get("action")
+        if not isinstance(action, str) or not action.strip():
+            raise ParseError(f"considered_actions[{index}].action must be a non-empty string")
+        supported = entry.get("supported")
+        if not isinstance(supported, bool):
+            raise ParseError(f"considered_actions[{index}].supported must be a boolean")
+        reason = entry.get("reason") or ""
+        if not isinstance(reason, str):
+            raise ParseError(f"considered_actions[{index}].reason must be a string")
+        items.append(ConsideredAction(action=action, supported=supported, reason=reason))
+    return tuple(items)
 
 
 def _parse_intent(

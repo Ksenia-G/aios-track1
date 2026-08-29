@@ -111,6 +111,34 @@ def _canonical_tuple(
     return tuple(controls_by_well[well] for well in sorted(controls_by_well, key=natural_key))
 
 
+def allocate_by_origin(items, slots: int):
+    """Раздать слоты по кругу, по одному на источник, затем второй круг.
+
+    Без этого первая структурная гипотеза съедала бы весь физический бюджет,
+    и остальные гипотезы пучка никогда не дошли бы до физики. Порядок
+    источников -- первый увиденный, поэтому результат детерминирован.
+    """
+    if slots <= 0:
+        return []
+    grouped: dict[object, list] = {}
+    for origin, item in items:
+        grouped.setdefault(origin, []).append((origin, item))
+    chosen: list = []
+    round_index = 0
+    while len(chosen) < slots:
+        progressed = False
+        for queue in grouped.values():
+            if round_index < len(queue):
+                chosen.append(queue[round_index])
+                progressed = True
+                if len(chosen) == slots:
+                    return chosen
+        if not progressed:
+            break
+        round_index += 1
+    return chosen
+
+
 class DeterministicMagnitudeResolver:
     """Deterministic core MagnitudeResolver. LLM/cognitive resolver -- future work.
 
@@ -173,7 +201,12 @@ class DeterministicMagnitudeResolver:
         ]
         agents = [c for c in candidates if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
         slots = max(budget - len(floor), 0)
-        return (*floor, *agents[:slots])
+        # Слоты делятся между структурными гипотезами: кандидат помнит свой
+        # bundle_digest, и это и есть его источник.
+        allocated = allocate_by_origin(
+            [(candidate.bundle_digest, candidate) for candidate in agents], slots
+        )
+        return (*floor, *(candidate for _origin, candidate in allocated))
 
     def _resolve_bundle_candidates(self, bundle: DecisionBundle) -> tuple[MagnitudeCandidate, ...]:
         if bundle.kind is CandidateKind.AGENT_BUNDLE:

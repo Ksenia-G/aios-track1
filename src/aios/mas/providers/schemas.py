@@ -103,17 +103,53 @@ def _intent_schema(intent_keys: frozenset[str], action_enum: type) -> dict[str, 
 def _envelope_schema(
     top_level: frozenset[str], intent_keys: frozenset[str], action_enum: type
 ) -> dict[str, object]:
-    if top_level != {"intents"}:  # pragma: no cover - контракт заморожен
-        raise ValueError(f"schema derivation: unexpected top-level keys {sorted(top_level)}")
+    """Схема ответа, выведенная из тех же ключей, что принимает парсер.
+
+    Форма с одним набором intents остаётся валидной. Пучок структурных
+    гипотез -- это массив таких же наборов: у него нет ни одного нового
+    поля намерения, поэтому запрет численных величин распространяется на
+    него автоматически, а не отдельным правилом.
+    """
+    intent_object = _intent_schema(intent_keys, action_enum)
+    intents_array = {"type": "array", "items": intent_object}
+    properties: dict[str, object] = {"intents": intents_array}
+    required = ["intents"]
+
+    if "hypotheses" in top_level:
+        properties["hypotheses"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"intents": intents_array},
+                "required": ["intents"],
+                "additionalProperties": False,
+            },
+        }
+        required = ["hypotheses"]
+        properties.pop("intents")
+    if "considered_actions" in top_level:
+        properties["considered_actions"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": _enum_values(action_enum)},
+                    "supported": {"type": "boolean"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["action", "supported", "reason"],
+                "additionalProperties": False,
+            },
+        }
+        required.append("considered_actions")
+
+    unknown = top_level - {"intents", "hypotheses", "considered_actions"}
+    if unknown:  # pragma: no cover - защита от молчаливого расширения
+        raise ValueError(f"schema derivation: unexpected top-level keys {sorted(unknown)}")
     return {
         "type": "object",
-        "properties": {
-            "intents": {
-                "type": "array",
-                "items": _intent_schema(intent_keys, action_enum),
-            }
-        },
-        "required": ["intents"],
+        "properties": properties,
+        "required": sorted(required),
         "additionalProperties": False,
     }
 

@@ -239,15 +239,23 @@ class DeterministicArbiter:
 
         production_primary = envelope.production_output.primary_proposal
         production_baseline = envelope.production_output.baseline_proposal
-        injection_primary = envelope.injection_output.primary_proposal
         injection_baseline = envelope.injection_output.baseline_proposal
 
-        pool = _generate_agent_bundle_pool(
-            production_primary=production_primary,
-            production_baseline=production_baseline,
-            injection_primary=injection_primary,
-            injection_baseline=injection_baseline,
-        )
+        # Пучок структурных гипотез: каждая получает собственное семейство
+        # кандидатов. Пустые alternatives дают ровно прежний набор.
+        pool = []
+        seen_keys: set[str] = set()
+        for hypothesis in envelope.injection_output.hypotheses():
+            for spec in _generate_agent_bundle_pool(
+                production_primary=production_primary,
+                production_baseline=production_baseline,
+                injection_primary=hypothesis,
+                injection_baseline=injection_baseline,
+            ):
+                if spec.structural_key in seen_keys:
+                    continue
+                seen_keys.add(spec.structural_key)
+                pool.append(spec)
         ordered_pool = _canonical_pool_order(pool)
 
         remaining_budget = envelope.simulation_budget.max_candidates - 2

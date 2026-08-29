@@ -204,7 +204,9 @@ def test_injection_parser_is_unchanged_by_the_prompt_work() -> None:
         StrictOutputParser,
     )
 
-    assert _ALLOWED_TOP_LEVEL == frozenset({"intents"})
+    # PERF-003B: контракт расширен пучком гипотез одного ответа. Прежняя
+    # форма с одним набором intents остаётся валидной.
+    assert _ALLOWED_TOP_LEVEL == frozenset({"intents", "hypotheses", "considered_actions"})
     assert "recipient_wells" in _ALLOWED_INTENT_KEYS
     bad = json.dumps(
         {

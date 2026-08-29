@@ -490,7 +490,8 @@ def test_injection_schema_permits_only_the_parser_fields() -> None:
     from aios.mas.specialists.injection.parser import _ALLOWED_INTENT_KEYS
 
     schema = injection_response_schema()
-    intent = schema["properties"]["intents"]["items"]
+    # PERF-003B: ответ несёт пучок гипотез; поля намерения те же самые.
+    intent = schema["properties"]["hypotheses"]["items"]["properties"]["intents"]["items"]
     assert set(intent["properties"]) == set(_ALLOWED_INTENT_KEYS)
     assert intent["additionalProperties"] is False
     assert schema_field_names(schema) >= set(_ALLOWED_INTENT_KEYS)

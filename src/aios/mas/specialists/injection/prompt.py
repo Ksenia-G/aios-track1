@@ -14,7 +14,7 @@ from aios.mas.invariants import require_no_baseline_field
 from aios.mas.specialists.injection.evidence_builder import EvidenceBuilder
 from aios.mas.specialists.injection.scope import state_card_regions
 
-PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.2.0"
+PROMPT_BUILDER_VERSION = "aios.mas.specialists.injection.prompt/1.3.0"
 
 #: Полевые правила каждого действия, как их проверяет замороженный
 #: `InjectionIntent.__post_init__`.
@@ -98,9 +98,14 @@ class PromptBuilder:
             "prompt_builder_version": self.version,
             "role": "INJECTION",
             "task": (
-                "Return a JSON object with key intents. Use only allowed_actions, and "
-                "obey the field contract of the action you choose. "
-                "Do not emit numerical setpoints."
+                "Return a JSON object with keys hypotheses and considered_actions. "
+                "hypotheses is a ranked list of 2 to 4 MATERIALLY DIFFERENT structural "
+                "alternatives, best first; each carries its own intents list. Two "
+                "hypotheses differing only in wording are one hypothesis, not two. "
+                "Judge every action in allowed_actions on the evidence below, and record "
+                "each one you judge unsupported in considered_actions with a short "
+                "evidence-based reason. Use only allowed_actions, obey the field contract "
+                "of each action you choose, and do not emit numerical setpoints."
             ),
             "schema_version": envelope.schema_version,
             "round": str(envelope.round),
@@ -165,20 +170,31 @@ class PromptBuilder:
             ],
             "peer_proposals": [ref.to_json() for ref in envelope.peer_proposals],
             "output_schema": {
-                "intents": [
+                "hypotheses": [
+                    {
+                        "intents": [
+                            {
+                                "action": "InjectionAction",
+                                "direction": "Direction",
+                                "intensity": "Intensity",
+                                "donor_wells": ["well_id"],
+                                "recipient_wells": ["well_id"],
+                                "source_regions": ["region_id"],
+                                "target_regions": ["region_id"],
+                                "evidence_ids": ["evidence_id"],
+                                "uncertainty": "UncertaintyLevel",
+                                "rationale_short": "string",
+                            }
+                        ]
+                    }
+                ],
+                "considered_actions": [
                     {
                         "action": "InjectionAction",
-                        "direction": "Direction",
-                        "intensity": "Intensity",
-                        "donor_wells": ["well_id"],
-                        "recipient_wells": ["well_id"],
-                        "source_regions": ["region_id"],
-                        "target_regions": ["region_id"],
-                        "evidence_ids": ["evidence_id"],
-                        "uncertainty": "UncertaintyLevel",
-                        "rationale_short": "string",
+                        "supported": "boolean",
+                        "reason": "string",
                     }
-                ]
+                ],
             },
         }
         return canonical_json(payload)
