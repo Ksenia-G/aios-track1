@@ -34,7 +34,10 @@ from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.intents import InjectionAction, InjectionIntent, ProductionAction, ProductionIntent
 from aios.mas.invariants import canonical_control_digest
 from aios.mas.magnitude import MagnitudeCandidate
-from aios.mas.magnitude_resolution.neighbourhood import expansion_plan
+from aios.mas.magnitude_resolution.neighbourhood import (
+    MAX_MULTI_INTENT_STEPS,
+    expansion_plan,
+)
 from aios.mas.magnitude_resolution.profile import ModelYEmpiricalMagnitudeProfile
 from aios.mas.magnitude_resolution.reallocation import (
     ReallocationError,
@@ -187,13 +190,20 @@ class DeterministicMagnitudeResolver:
         нерасширяемое действие, инъекция -- идёт прежним единственным путём:
         поиск не имеет права менять смысл структурной гипотезы.
         """
-        plan = self._production_expansion_plan(bundle)
-        if plan is not None:
-            intent, pairs = plan
-            return tuple(
-                self._resolve_agent_bundle(bundle, production_override=(intent, wells, factor))
-                for wells, factor in pairs
-            )
+        overrides = self._production_expansion_plan(bundle)
+        if overrides is not None:
+            candidates: list[MagnitudeCandidate] = []
+            for override in overrides:
+                try:
+                    candidates.append(
+                        self._resolve_agent_bundle(bundle, production_override=override)
+                    )
+                except MagnitudeResolutionError:
+                    # Конфликтующая комбинация -- отсутствие кандидата, а не
+                    # отказ всей гипотезы: остальные ступени остаются в силе.
+                    continue
+            if candidates:
+                return tuple(candidates)
         injection = self._reallocation_expansion_plan(bundle)
         if injection is not None:
             intent, triples = injection
@@ -251,30 +261,56 @@ class DeterministicMagnitudeResolver:
         return intent, tuple(triples)
 
     def _production_expansion_plan(self, bundle: DecisionBundle):
-        """Единственное масштабирующее намерение и его план, либо None."""
-        digests = bundle.production_intent_digests
-        if len(digests) != 1:
-            return None
-        intent = self._intent_lookup.get(digests[0])
-        if intent is None or not isinstance(intent, ProductionIntent):
-            return None
-        action = ProductionAction(intent.action)
-        if action not in (
-            ProductionAction.INCREASE_OFFTAKE,
-            ProductionAction.REDUCE_OFFTAKE,
-        ):
-            return None
-        anchor = (
-            self._profile.producer_uplift_factor(intent.intensity)
-            if action is ProductionAction.INCREASE_OFFTAKE
-            else self._profile.producer_reduction_factor(intent.intensity)
+        """Согласованная лестница численных вариантов по всем намерениям.
+
+        Раскрываются ВСЕ масштабирующие намерения предложения, а не одно:
+        реальные предложения регулярно содержат несколько, и на них поиск
+        прежде молча схлопывался в единственный кандидат.
+
+        Варианты перебираются совместно (шаг k берёт k-й вариант каждого
+        намерения), а не декартовым произведением: иначе число кандидатов
+        росло бы как произведение сеток. Более короткая лестница насыщается
+        на своём последнем варианте, а совпавшие управления убирает обычная
+        дедупликация.
+
+        Немасштабируемые намерения (SHUT_IN, REOPEN, HOLD) в лестницу не
+        входят и материализуются своим обычным обработчиком в КАЖДОМ
+        кандидате: дискретное действие не превращается в сетку величин и не
+        имеет права отключать расширение остальных.
+        """
+        ladders: dict[str, tuple[tuple[tuple[str, ...], float], ...]] = {}
+        for digest_ in bundle.production_intent_digests:
+            intent = self._intent_lookup.get(digest_)
+            if intent is None or not isinstance(intent, ProductionIntent):
+                return None
+            action = ProductionAction(intent.action)
+            if action not in (
+                ProductionAction.INCREASE_OFFTAKE,
+                ProductionAction.REDUCE_OFFTAKE,
+            ):
+                continue
+            anchor = (
+                self._profile.producer_uplift_factor(intent.intensity)
+                if action is ProductionAction.INCREASE_OFFTAKE
+                else self._profile.producer_reduction_factor(intent.intensity)
+            )
+            if anchor is None:
+                continue
+            pairs = expansion_plan(action, intent.intensity, intent.target_wells, anchor.value)
+            if pairs:
+                ladders[digest_] = pairs
+
+        steps = min(
+            max((len(pairs) for pairs in ladders.values()), default=0),
+            MAX_MULTI_INTENT_STEPS,
         )
-        if anchor is None:
+        if not ladders or steps <= 1:
             return None
-        pairs = expansion_plan(action, intent.intensity, intent.target_wells, anchor.value)
-        if len(pairs) <= 1:
-            return None
-        return intent, pairs
+        overrides = tuple(
+            {digest_: pairs[min(step, len(pairs) - 1)] for digest_, pairs in ladders.items()}
+            for step in range(steps)
+        )
+        return overrides
 
     # -- bundle-level resolution ------------------------------------------
 
@@ -312,17 +348,18 @@ class DeterministicMagnitudeResolver:
         touched_producers: set[str] = set()
         touched_injectors: set[str] = set()
 
-        if production_override is not None:
-            _intent, wells, factor = production_override
-            self._apply_producer_factor(wells, factor, producers_by_well, touched_producers)
-        else:
-            for intent_digest in bundle.production_intent_digests:
-                intent = self._intent_lookup.get(intent_digest)
-                if intent is None or not isinstance(intent, ProductionIntent):
-                    raise MagnitudeResolutionError(
-                        f"production intent digest {intent_digest!r} not found in context"
-                    )
+        for intent_digest in bundle.production_intent_digests:
+            intent = self._intent_lookup.get(intent_digest)
+            if intent is None or not isinstance(intent, ProductionIntent):
+                raise MagnitudeResolutionError(
+                    f"production intent digest {intent_digest!r} not found in context"
+                )
+            override = (production_override or {}).get(intent_digest)
+            if override is None:
                 self._apply_production_intent(intent, producers_by_well, touched_producers)
+            else:
+                wells, factor = override
+                self._apply_producer_factor(wells, factor, producers_by_well, touched_producers)
 
         if injection_override is not None:
             _intent, donors, recipients, fraction = injection_override

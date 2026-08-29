@@ -23,6 +23,12 @@ from aios.mas.common import Intensity
 from aios.mas.intents import ProductionAction
 from aios.schedule.events import natural_key
 
+#: Верхняя граница числа шагов согласованной лестницы при нескольких
+#: масштабирующих намерениях: варианты перебираются совместно, а не
+#: декартовым произведением, иначе число кандидатов растёт как произведение
+#: сеток и перестаёт быть ограниченным.
+MAX_MULTI_INTENT_STEPS = 8
+
 #: Верхняя граница числа подмножеств целей. Комбинаторику обязан ограничивать
 #: сам поиск: авторизованный набор целей задаёт LLM, и он может быть большим.
 MAX_TARGET_SUBSETS = 7
@@ -131,6 +137,7 @@ def expansion_plan(
 
 
 __all__ = [
+    "MAX_MULTI_INTENT_STEPS",
     "MAX_TARGET_SUBSETS",
     "expansion_plan",
     "producer_factor_grid",
