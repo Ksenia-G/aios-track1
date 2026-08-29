@@ -324,6 +324,7 @@ def run_mas_variant(
         baseline=baseline,
         workspace_root=Path(context.workspace_root) / variant_id,
         decision_epochs=epochs,
+        geology=context.geology(),
     )
 
     arbiter = _EnvelopeCapturingArbiter()

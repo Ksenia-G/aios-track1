@@ -906,7 +906,13 @@ def test_reallocate_injection_conserves_total_between_pair() -> None:
     assert rates["I1"] + rates["I2"] == pytest.approx(150.0)
 
 
-def test_reallocate_injection_multi_well_fails_closed() -> None:
+def test_reallocate_injection_supports_multiple_donors() -> None:
+    """PERF-003 снял ограничение «ровно одна пара».
+
+    Раньше многопарный перенос отвергался как непредставимый. Теперь он
+    материализуется, и суммарная закачка сохраняется: перенос не имеет права
+    незаметно стать масштабированием поля.
+    """
     previous_injectors = (
         _injector("I1", rate=100.0),
         _injector("I2", rate=50.0),
@@ -924,7 +930,12 @@ def test_reallocate_injection_multi_well_fails_closed() -> None:
     )
     bundle = _decision_bundle_for(envelope, CandidateKind.AGENT_BUNDLE, use_primary=True)
     candidates = resolver.resolve(_decision_for(envelope, extra_bundles=(bundle,)))
-    assert not any(c.candidate_kind is CandidateKind.AGENT_BUNDLE for c in candidates)
+    agents = [c for c in candidates if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
+    assert agents, "a multi-donor reallocation must now be representable"
+    before = sum(c.surface_rate for c in previous_injectors)
+    for candidate in agents:
+        after = sum(c.surface_rate for c in candidate.injectors)
+        assert after == pytest.approx(before, abs=1e-9)
 
 
 def test_hold_intent_inside_agent_bundle_is_a_noop() -> None:

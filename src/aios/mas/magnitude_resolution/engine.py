@@ -36,6 +36,12 @@ from aios.mas.invariants import canonical_control_digest
 from aios.mas.magnitude import MagnitudeCandidate
 from aios.mas.magnitude_resolution.neighbourhood import expansion_plan
 from aios.mas.magnitude_resolution.profile import ModelYEmpiricalMagnitudeProfile
+from aios.mas.magnitude_resolution.reallocation import (
+    ReallocationError,
+    donor_recipient_splits,
+    materialize_reallocation,
+    transfer_fraction_grid,
+)
 from aios.schedule import InjectorControl, ProducerControl, WellStatus, natural_key
 
 RESOLVER_VERSION = "aios.mas.magnitude_resolution/1.0.0"
@@ -182,15 +188,67 @@ class DeterministicMagnitudeResolver:
         поиск не имеет права менять смысл структурной гипотезы.
         """
         plan = self._production_expansion_plan(bundle)
-        if plan is None:
-            return (self._resolve_agent_bundle(bundle),)
-        intent, pairs = plan
-        candidates: list[MagnitudeCandidate] = []
-        for wells, factor in pairs:
-            candidates.append(
+        if plan is not None:
+            intent, pairs = plan
+            return tuple(
                 self._resolve_agent_bundle(bundle, production_override=(intent, wells, factor))
+                for wells, factor in pairs
             )
-        return tuple(candidates)
+        injection = self._reallocation_expansion_plan(bundle)
+        if injection is not None:
+            intent, triples = injection
+            candidates: list[MagnitudeCandidate] = []
+            for donors, recipients, fraction in triples:
+                try:
+                    candidates.append(
+                        self._resolve_agent_bundle(
+                            bundle,
+                            injection_override=(intent, donors, recipients, fraction),
+                        )
+                    )
+                except MagnitudeResolutionError:
+                    # Непредставимый перенос -- это отсутствие кандидата, а не
+                    # отказ всей гипотезы: соседи по сетке остаются в силе.
+                    continue
+            if candidates:
+                return tuple(candidates)
+        return (self._resolve_agent_bundle(bundle),)
+
+    def _reallocation_expansion_plan(self, bundle: DecisionBundle):
+        """Единственное намерение переноса и его план, либо None."""
+        digests = bundle.injection_intent_digests
+        if len(digests) != 1:
+            return None
+        intent = self._intent_lookup.get(digests[0])
+        if intent is None or not isinstance(intent, InjectionIntent):
+            return None
+        if InjectionAction(intent.action) is not InjectionAction.REALLOCATE_INJECTION:
+            return None
+        anchor = self._profile.reallocation_transfer_fraction(intent.intensity)
+        if anchor is None:
+            return None
+        splits = donor_recipient_splits(intent.donor_wells, intent.recipient_wells)
+        grid = transfer_fraction_grid(intent.intensity)
+        if not splits or not grid:
+            return None
+        # Прежняя единственная политика идёт первой: полный набор и anchor.
+        triples: list[tuple[tuple[str, ...], tuple[str, ...], float]] = [
+            (splits[0][0], splits[0][1], anchor.value)
+        ]
+        seen = {triples[0]}
+        for total in range(len(splits) + len(grid)):
+            for split_index in range(len(splits)):
+                grid_index = total - split_index
+                if not 0 <= grid_index < len(grid):
+                    continue
+                donors, recipients = splits[split_index]
+                item = (donors, recipients, grid[grid_index])
+                if item not in seen:
+                    seen.add(item)
+                    triples.append(item)
+        if len(triples) <= 1:
+            return None
+        return intent, tuple(triples)
 
     def _production_expansion_plan(self, bundle: DecisionBundle):
         """Единственное масштабирующее намерение и его план, либо None."""
@@ -243,7 +301,7 @@ class DeterministicMagnitudeResolver:
         )
 
     def _resolve_agent_bundle(
-        self, bundle: DecisionBundle, *, production_override=None
+        self, bundle: DecisionBundle, *, production_override=None, injection_override=None
     ) -> MagnitudeCandidate:
         producers_by_well: dict[str, ProducerControl] = {
             c.well: c for c in self._context.previous_producers
@@ -266,13 +324,23 @@ class DeterministicMagnitudeResolver:
                     )
                 self._apply_production_intent(intent, producers_by_well, touched_producers)
 
-        for intent_digest in bundle.injection_intent_digests:
-            intent = self._intent_lookup.get(intent_digest)
-            if intent is None or not isinstance(intent, InjectionIntent):
-                raise MagnitudeResolutionError(
-                    f"injection intent digest {intent_digest!r} not found in context"
-                )
-            self._apply_injection_intent(intent, injectors_by_well, touched_injectors)
+        if injection_override is not None:
+            _intent, donors, recipients, fraction = injection_override
+            self._apply_reallocation(
+                donors=donors,
+                recipients=recipients,
+                fraction=fraction,
+                controls_by_well=injectors_by_well,
+                touched=touched_injectors,
+            )
+        else:
+            for intent_digest in bundle.injection_intent_digests:
+                intent = self._intent_lookup.get(intent_digest)
+                if intent is None or not isinstance(intent, InjectionIntent):
+                    raise MagnitudeResolutionError(
+                        f"injection intent digest {intent_digest!r} not found in context"
+                    )
+                self._apply_injection_intent(intent, injectors_by_well, touched_injectors)
 
         return self._build_candidate(
             bundle,
@@ -431,37 +499,53 @@ class DeterministicMagnitudeResolver:
                 controls_by_well[well] = replace(previous, surface_rate=new_rate)
             return
         if action is InjectionAction.REALLOCATE_INJECTION:
-            if len(intent.donor_wells) != 1 or len(intent.recipient_wells) != 1:
+            if not intent.donor_wells or not intent.recipient_wells:
                 raise MagnitudeResolutionError(
-                    "REALLOCATE_INJECTION: MAGNITUDE-RESOLVER-001 only supports exactly one "
-                    "donor and one recipient well (matches the only tested transfer pattern)"
+                    "REALLOCATE_INJECTION: at least one donor and one recipient well are required"
                 )
             anchor = self._profile.reallocation_transfer_fraction(intent.intensity)
             if anchor is None:
                 raise MagnitudeResolutionError(
                     f"REALLOCATE_INJECTION: no empirical anchor for intensity {intent.intensity}"
                 )
-            donor_well = intent.donor_wells[0]
-            recipient_well = intent.recipient_wells[0]
-            donor_previous = self._require_untouched_control(
-                donor_well, controls_by_well, touched, "injection"
-            )
-            recipient_previous = self._require_untouched_control(
-                recipient_well, controls_by_well, touched, "injection"
-            )
-            donor_rate = donor_previous.surface_rate or 0.0
-            delta = anchor.value * donor_rate
-            controls_by_well[donor_well] = replace(
-                donor_previous, surface_rate=max(donor_rate - delta, 0.0)
-            )
-            controls_by_well[recipient_well] = replace(
-                recipient_previous,
-                surface_rate=max((recipient_previous.surface_rate or 0.0) + delta, 0.0),
+            self._apply_reallocation(
+                donors=intent.donor_wells,
+                recipients=intent.recipient_wells,
+                fraction=anchor.value,
+                controls_by_well=controls_by_well,
+                touched=touched,
             )
             return
         raise MagnitudeResolutionError(
             f"unsupported InjectionAction for MAGNITUDE-RESOLVER-001: {action}"
         )
+
+    def _apply_reallocation(
+        self,
+        *,
+        donors,
+        recipients,
+        fraction: float,
+        controls_by_well: dict[str, InjectorControl],
+        touched: set[str],
+    ) -> None:
+        """Материализовать один перенос закачки.
+
+        Сколько снято с доноров, столько роздано получателям: перенос не имеет
+        права незаметно превратиться в масштабирование поля.
+        """
+        for well in (*donors, *recipients):
+            self._require_untouched_control(well, controls_by_well, touched, "injection")
+        try:
+            updated = materialize_reallocation(
+                donors=donors,
+                recipients=recipients,
+                fraction=fraction,
+                controls=controls_by_well,
+            )
+        except ReallocationError as error:
+            raise MagnitudeResolutionError(f"REALLOCATE_INJECTION: {error}") from error
+        controls_by_well.update(updated)
 
     # -- shared helpers ------------------------------------------------------
 

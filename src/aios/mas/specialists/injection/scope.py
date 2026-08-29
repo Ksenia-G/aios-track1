@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 
 from aios.mas.envelopes import InjectionEnvelope
 from aios.mas.intents import InjectionAction, InjectionIntent
+from aios.schedule.events import natural_key
 from aios.state import StateCard, WellRole, WellStateSnapshot
 
 #: Действия, чей замороженный контракт ТРЕБУЕТ region-поля (см.
@@ -29,6 +30,10 @@ REGION_REQUIRED_ACTIONS = frozenset(
     }
 )
 
+#: Действия, переносящие закачку между скважинами: им нужен и донор, и
+#: получатель, то есть минимум два нагнетателя на карте.
+REDISTRIBUTION_ACTIONS = REGION_REQUIRED_ACTIONS
+
 
 class ScopeError(ValueError):
     """Intent ссылается на скважину или регион вне текущего StateCard."""
@@ -39,24 +44,39 @@ def state_card_regions(state_card: StateCard) -> frozenset[str]:
     return frozenset(dict(state_card.geology.block_membership).values())
 
 
+def eligible_injectors(state_card: StateCard) -> tuple[str, ...]:
+    """Нагнетатели, между которыми вообще можно что-то перераспределить."""
+    return tuple(
+        sorted(
+            (well.well_id for well in state_card.wells if well.role is WellRole.INJECTOR),
+            key=natural_key,
+        )
+    )
+
+
 def groundable_injection_actions(
     state_card: StateCard, actions: Sequence[InjectionAction]
 ) -> tuple[InjectionAction, ...]:
     """Подмножество `actions`, заземляемое против текущего StateCard.
 
-    Ничего не выдумывает: при известных блоках список возвращается как есть.
-    Пустой `block_membership` -- это не повод сочинить членство, а повод не
-    предлагать действия, которые без него не собираются.
+    Ничего не выдумывает. Region-действие требует известных блоков, а
+    перераспределение -- ещё и двух нагнетателей: без донора и получателя
+    переносить нечего и не на что, и предлагать такое действие значило бы
+    приглашать провайдера в заведомо несобираемый ответ.
     """
-    if state_card_regions(state_card):
+    if not state_card_regions(state_card):
+        return tuple(action for action in actions if action not in REGION_REQUIRED_ACTIONS)
+    if len(eligible_injectors(state_card)) >= 2:
         return tuple(actions)
-    return tuple(action for action in actions if action not in REGION_REQUIRED_ACTIONS)
+    return tuple(action for action in actions if action not in REDISTRIBUTION_ACTIONS)
 
 
 __all__ = [
+    "REDISTRIBUTION_ACTIONS",
     "REGION_REQUIRED_ACTIONS",
     "ScopeAuditor",
     "ScopeError",
+    "eligible_injectors",
     "groundable_injection_actions",
     "state_card_regions",
 ]

@@ -55,7 +55,32 @@ def _card_without_regions():
 
 
 def _card_with_regions():
+    """Карта с блоками И двумя нагнетателями.
+
+    PERF-003 ужесточил правило: одних блоков мало, перераспределение требует
+    донора И получателя. Фикстура несёт обоих, иначе она проверяла бы уже
+    несуществующий контракт.
+    """
+    from aios.state import WellRole
+
+    base = synthetic_state_card()
+    injector = next(w for w in base.wells if w.role is WellRole.INJECTOR)
+    wells = (*base.wells, replace(injector, well_id="SYN-I2"))
+    return replace(
+        base,
+        wells=wells,
+        geology=GeologyContext(block_membership={w.well_id: "SYN-B1" for w in wells}),
+    )
+
+
+def _card_with_regions_single_injector():
     return synthetic_state_card()
+
+
+def test_redistribution_needs_a_donor_and_a_recipient() -> None:
+    """Блоки есть, а нагнетатель один: переносить нечего и не на что."""
+    offered = groundable_injection_actions(_card_with_regions_single_injector(), ALL_ACTIONS)
+    assert InjectionAction.REALLOCATE_INJECTION not in offered
 
 
 def test_real_state_card_condition_has_no_regions() -> None:

@@ -60,6 +60,21 @@ class BenchmarkContext:
     def baseline_inputs(self):
         return read_baseline_inputs(self.case)
 
+    def geology(self):
+        """Геология, выведенная из самой колоды кейса.
+
+        Пустой контекст -- это отсутствие массива регионов в колоде, а не
+        ошибка: система обязана работать и без region-действий.
+        """
+        from aios.geology import geology_for_deck
+
+        history = self.case.history
+        return geology_for_deck(
+            deck_root=history.deck_root,
+            data_file=str(history.data_file),
+            schedule_include=str(history.schedule_include),
+        )
+
     def frame(self, *, initial_state_digest: str, chdd_month_count: int | None) -> PhysicalFrame:
         case = self.case
         return PhysicalFrame(

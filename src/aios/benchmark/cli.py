@@ -81,6 +81,7 @@ def _initial_state_card(context: BenchmarkContext):
         simulator_digest=context.case.simulator.docker_image,
         schedule_hash=evaluation.schedule_sha,
         well_controls=controls,
+        geology=context.geology(),
     )
 
 
