@@ -671,9 +671,15 @@ def test_m18_numerically_duplicate_agent_candidate_does_not_consume_extra_slot()
     resolver = DeterministicMagnitudeResolver(context=_context(envelope))
     bundle_1 = _decision_bundle_for(envelope, CandidateKind.AGENT_BUNDLE, use_primary=True)
     bundle_2 = _decision_bundle_for(envelope, CandidateKind.AGENT_BUNDLE, use_primary=True)
-    candidates = resolver.resolve(_decision_for(envelope, extra_bundles=(bundle_1, bundle_2)))
-    agent_candidates = [c for c in candidates if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
-    assert len(agent_candidates) == 1
+    single = resolver.resolve(_decision_for(envelope, extra_bundles=(bundle_1,)))
+    doubled = resolver.resolve(_decision_for(envelope, extra_bundles=(bundle_1, bundle_2)))
+    # Инвариант M18 -- численный дубликат не занимает лишнего слота. Одна
+    # структурная гипотеза с PERF-002B раскрывается в численную окрестность,
+    # поэтому проверяется не абсолютное число, а то, что второй такой же
+    # bundle не добавляет ничего.
+    agents_single = [c for c in single if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
+    agents_doubled = [c for c in doubled if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
+    assert [c.digest() for c in agents_single] == [c.digest() for c in agents_doubled]
 
 
 def test_m19_hold_baseline_survive_even_if_numerically_equal_to_each_other() -> None:

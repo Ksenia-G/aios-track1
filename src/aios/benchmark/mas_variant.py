@@ -108,6 +108,8 @@ class _ContextualMagnitudeResolver:
     previous_producers: tuple = ()
     previous_injectors: tuple = ()
 
+    funnel: list = field(default_factory=list)
+
     def resolve(self, decision):
         envelope = self.arbiter.last_envelope
         if envelope is None:
@@ -120,7 +122,10 @@ class _ContextualMagnitudeResolver:
             baseline_producers=self.baseline_producers,
             baseline_injectors=self.baseline_injectors,
         )
-        return DeterministicMagnitudeResolver(context=context).resolve(decision)
+        engine = DeterministicMagnitudeResolver(context=context)
+        candidates = engine.resolve(decision)
+        self.funnel.append({"effective_date": str(self.effective_date), **engine.last_funnel})
+        return candidates
 
 
 def _carry_forward(resolver: _ContextualMagnitudeResolver, committed) -> None:
@@ -444,6 +449,9 @@ def run_mas_variant(
             "committed_candidate_digest": final.committed_candidate_digest,
             "selection_rule": final.selection.selection_rule_version,
             "rejected": [str(item.reason) for item in final.selection.rejected],
+            # Воронка поиска по эпохам: виртуальных вариантов может быть много,
+            # физических -- никогда больше бюджета.
+            "search_funnel": list(resolver.funnel),
         },
     )
 

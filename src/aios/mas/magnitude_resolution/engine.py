@@ -34,6 +34,7 @@ from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.intents import InjectionAction, InjectionIntent, ProductionAction, ProductionIntent
 from aios.mas.invariants import canonical_control_digest
 from aios.mas.magnitude import MagnitudeCandidate
+from aios.mas.magnitude_resolution.neighbourhood import expansion_plan
 from aios.mas.magnitude_resolution.profile import ModelYEmpiricalMagnitudeProfile
 from aios.schedule import InjectorControl, ProducerControl, WellStatus, natural_key
 
@@ -119,18 +120,103 @@ class DeterministicMagnitudeResolver:
         self._profile = profile or ModelYEmpiricalMagnitudeProfile()
         self._resolver_version = f"{RESOLVER_VERSION}+{self._profile.version}"
         self._intent_lookup = _build_intent_lookup(context.arbiter_envelope)
+        #: Диагностика последнего resolve(): сколько численных вариантов было
+        #: построено, сколько осталось после дедупликации и сколько дошло до
+        #: физики. Не влияет на решения -- только наблюдаемость воронки.
+        self.last_funnel: dict[str, int] = {}
 
     def resolve(self, decision: ArbiterDecision) -> tuple[MagnitudeCandidate, ...]:
         resolved: list[MagnitudeCandidate] = []
         for bundle in decision.bundles:
             try:
-                candidate = self._resolve_bundle(bundle)
+                produced = self._resolve_bundle_candidates(bundle)
             except MagnitudeResolutionError:
                 if bundle.kind in (CandidateKind.HOLD, CandidateKind.DETERMINISTIC_BASELINE):
                     raise
                 continue
-            resolved.append(candidate)
-        return self._dedup_preserving_floor(resolved)
+            resolved.extend(produced)
+        deduped = self._dedup_preserving_floor(resolved)
+        final = self._apply_simulation_budget(deduped)
+        self.last_funnel = {
+            "virtual_candidates_generated": len(resolved),
+            "unique_control_candidates": len(deduped),
+            "physical_candidates_evaluated": len(final),
+            "agent_finalists": sum(
+                1 for c in final if c.candidate_kind is CandidateKind.AGENT_BUNDLE
+            ),
+        }
+        return final
+
+    def _apply_simulation_budget(
+        self, candidates: tuple[MagnitudeCandidate, ...]
+    ) -> tuple[MagnitudeCandidate, ...]:
+        """Численный перебор может быть широким, физический -- нет.
+
+        Пол (HOLD/DETERMINISTIC_BASELINE) сохраняется целиком; под срез
+        попадают только расширенные agent-кандидаты, и порядок их поступления
+        уже упорядочен по разнообразию.
+        """
+        budget = self._context.arbiter_envelope.simulation_budget.max_candidates
+        floor = [
+            c
+            for c in candidates
+            if c.candidate_kind in (CandidateKind.HOLD, CandidateKind.DETERMINISTIC_BASELINE)
+        ]
+        agents = [c for c in candidates if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
+        slots = max(budget - len(floor), 0)
+        return (*floor, *agents[:slots])
+
+    def _resolve_bundle_candidates(self, bundle: DecisionBundle) -> tuple[MagnitudeCandidate, ...]:
+        if bundle.kind is CandidateKind.AGENT_BUNDLE:
+            return self._resolve_agent_bundle_neighbourhood(bundle)
+        return (self._resolve_bundle(bundle),)
+
+    def _resolve_agent_bundle_neighbourhood(
+        self, bundle: DecisionBundle
+    ) -> tuple[MagnitudeCandidate, ...]:
+        """Расширить ОДНУ структурную гипотезу в численную окрестность.
+
+        Расширяется только масштабирующее производственное намерение и только
+        внутри авторизованных им скважин. Всё остальное -- несколько намерений,
+        нерасширяемое действие, инъекция -- идёт прежним единственным путём:
+        поиск не имеет права менять смысл структурной гипотезы.
+        """
+        plan = self._production_expansion_plan(bundle)
+        if plan is None:
+            return (self._resolve_agent_bundle(bundle),)
+        intent, pairs = plan
+        candidates: list[MagnitudeCandidate] = []
+        for wells, factor in pairs:
+            candidates.append(
+                self._resolve_agent_bundle(bundle, production_override=(intent, wells, factor))
+            )
+        return tuple(candidates)
+
+    def _production_expansion_plan(self, bundle: DecisionBundle):
+        """Единственное масштабирующее намерение и его план, либо None."""
+        digests = bundle.production_intent_digests
+        if len(digests) != 1:
+            return None
+        intent = self._intent_lookup.get(digests[0])
+        if intent is None or not isinstance(intent, ProductionIntent):
+            return None
+        action = ProductionAction(intent.action)
+        if action not in (
+            ProductionAction.INCREASE_OFFTAKE,
+            ProductionAction.REDUCE_OFFTAKE,
+        ):
+            return None
+        anchor = (
+            self._profile.producer_uplift_factor(intent.intensity)
+            if action is ProductionAction.INCREASE_OFFTAKE
+            else self._profile.producer_reduction_factor(intent.intensity)
+        )
+        if anchor is None:
+            return None
+        pairs = expansion_plan(action, intent.intensity, intent.target_wells, anchor.value)
+        if len(pairs) <= 1:
+            return None
+        return intent, pairs
 
     # -- bundle-level resolution ------------------------------------------
 
@@ -156,7 +242,9 @@ class DeterministicMagnitudeResolver:
             sorted(set(bundle.production_intent_digests) | set(bundle.injection_intent_digests))
         )
 
-    def _resolve_agent_bundle(self, bundle: DecisionBundle) -> MagnitudeCandidate:
+    def _resolve_agent_bundle(
+        self, bundle: DecisionBundle, *, production_override=None
+    ) -> MagnitudeCandidate:
         producers_by_well: dict[str, ProducerControl] = {
             c.well: c for c in self._context.previous_producers
         }
@@ -166,13 +254,17 @@ class DeterministicMagnitudeResolver:
         touched_producers: set[str] = set()
         touched_injectors: set[str] = set()
 
-        for intent_digest in bundle.production_intent_digests:
-            intent = self._intent_lookup.get(intent_digest)
-            if intent is None or not isinstance(intent, ProductionIntent):
-                raise MagnitudeResolutionError(
-                    f"production intent digest {intent_digest!r} not found in context"
-                )
-            self._apply_production_intent(intent, producers_by_well, touched_producers)
+        if production_override is not None:
+            _intent, wells, factor = production_override
+            self._apply_producer_factor(wells, factor, producers_by_well, touched_producers)
+        else:
+            for intent_digest in bundle.production_intent_digests:
+                intent = self._intent_lookup.get(intent_digest)
+                if intent is None or not isinstance(intent, ProductionIntent):
+                    raise MagnitudeResolutionError(
+                        f"production intent digest {intent_digest!r} not found in context"
+                    )
+                self._apply_production_intent(intent, producers_by_well, touched_producers)
 
         for intent_digest in bundle.injection_intent_digests:
             intent = self._intent_lookup.get(intent_digest)
@@ -188,6 +280,26 @@ class DeterministicMagnitudeResolver:
             _canonical_tuple(injectors_by_well),
             source_intent_digests=self._bundle_intent_digests(bundle),
         )
+
+    def _apply_producer_factor(
+        self,
+        wells,
+        factor: float,
+        controls_by_well: dict[str, ProducerControl],
+        touched: set[str],
+    ) -> None:
+        """Применить множитель к авторизованным скважинам.
+
+        Та же арифметика и тот же потолок, что и у прежнего единственного
+        anchor-пути: расширяется набор проверяемых точек, а не правила.
+        """
+        for well in wells:
+            previous = self._require_untouched_control(
+                well, controls_by_well, touched, "production"
+            )
+            previous_rate = previous.liquid_rate or 0.0
+            new_rate = min(previous_rate * factor, TRACK1_WLPR_HARD_MAX)
+            controls_by_well[well] = replace(previous, liquid_rate=new_rate)
 
     # -- production action handlers ----------------------------------------
 
