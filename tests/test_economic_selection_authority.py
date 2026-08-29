@@ -340,6 +340,21 @@ def test_frozen_contract_files_unmodified() -> None:
 
 WAVE1_BASE = "dc4dfc090ad8f4aa1d231cad986e02f24f77b727"
 
+# Файлы, чьё правило было пересмотрено НАМЕРЕННО, с новой базой сравнения.
+# Пересмотр остаётся ровно таким же событием, как и раньше: он не проходит
+# молча, его приходится записать здесь и назвать причину. Ослабления нет --
+# от новой базы файл защищён так же строго, как остальные от Wave1.
+#
+# `chdd/trajectory.py`: строка входа ЧДД датировалась НАЧАЛОМ интервала, тогда
+# как все её значения читаются на КОНЦЕ. Дисконтирование годовое, поэтому
+# интервал через границу года попадал не в свой год, и годовая добыча
+# расходилась с официальной (+26.7% в 2007, -8.9% в 2015) при верных
+# суммарных объёмах. База сдвинута на исправление; замороженной осталась
+# именно та раскладка, которая воспроизводит официальный расчёт.
+REBASED_CONTRACTS = {
+    "src/aios/chdd/trajectory.py": "bc899ea6082076a19e98f3e39ea2b6b84b87d22b",
+}
+
 # Names whose addition is an authorised lineage extension, not a rule change.
 LINEAGE_ADDITIONS = frozenset(
     {
@@ -369,7 +384,7 @@ def _base_source(relative_path: str) -> str:
 
     repo_root = Path(__file__).resolve().parents[1]
     return subprocess.run(
-        ["git", "show", f"{WAVE1_BASE}:{relative_path}"],
+        ["git", "show", f"{REBASED_CONTRACTS.get(relative_path, WAVE1_BASE)}:{relative_path}"],
         cwd=repo_root,
         capture_output=True,
         text=True,
