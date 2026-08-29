@@ -55,6 +55,7 @@ from aios.schedule.events import (
 )
 from aios.schedule.generator import render_schedule, schedule_sha256
 from aios.schedule.state import FieldState
+from aios.schedule.validator import require_representable_controls
 
 COMPILER_ID = "aios.execution.compiler"
 COMPILER_VERSION = "1.0.0"
@@ -225,6 +226,11 @@ def compile_candidate_schedule(
     else:
         action_producers = _merge_controls(in_force_producers, canonical.producers)
         action_injectors = _merge_controls(in_force_injectors, canonical.injectors)
+
+    # Управление, которое нельзя записать легальной строкой WCONPROD/WCONINJE,
+    # обязано быть отвергнуто ЗДЕСЬ, а не потратить полный прогон симулятора,
+    # чтобы упасть при разборе колоды.
+    require_representable_controls(action_producers, action_injectors)
 
     # Композитное расписание: закоммиченная история на [T0, effective_date),
     # затем управления кандидата. История выписывается явно на своих датах --

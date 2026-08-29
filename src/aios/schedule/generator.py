@@ -49,11 +49,23 @@ def format_number(value: float | None) -> str:
     return f"{value:.10g}"
 
 
+def _control_mode_field(mode: str, value: float | None) -> str:
+    """Поле режима WCONPROD/WCONINJE.
+
+    Режим, управляющий по расходу, обязан иметь своё значение: OPM отвергает
+    колоду с `CMODE` без величины ещё при разборе. У закрытой скважины
+    величины нет и быть не должно, поэтому поле режима остаётся дефолтным --
+    численное значение здесь не выдумывается, иначе setpoint появился бы
+    мимо MagnitudeResolver.
+    """
+    return DEFAULTED if value is None else f"'{mode}'"
+
+
 def _producer_line(control: ProducerControl) -> str:
     fields = [
         f"'{control.well}'",
         f"'{control.status}'",
-        f"'{control.mode}'",
+        _control_mode_field(control.mode, control.liquid_rate),
         DEFAULTED,
         DEFAULTED,
         DEFAULTED,
@@ -71,7 +83,7 @@ def _injector_line(control: InjectorControl) -> str:
         f"'{control.well}'",
         f"'{control.phase}'",
         f"'{control.status}'",
-        f"'{control.mode}'",
+        _control_mode_field(control.mode, control.surface_rate),
         format_number(control.surface_rate),
         DEFAULTED,
         format_number(control.bhp_limit),
