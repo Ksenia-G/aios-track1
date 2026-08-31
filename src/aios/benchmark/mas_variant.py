@@ -207,6 +207,23 @@ def guardian_telemetry(results) -> GuardianTelemetry:
     )
 
 
+def fallback_count(results) -> int:
+    """Число specialist-РЕШЕНИЙ (не эпох), чей провенанс несёт fallback_used=True.
+
+    Production и Injection одной эпохи считаются НЕЗАВИСИМО: эпоха, где оба
+    упали на fallback, даёт +2, а не +1. `DecisionStepResult.*_fallback_used`
+    -- это уже провенанс ИМЕННО того раунда, что дошёл до Arbiter (Round 2
+    переопределяет Round 1, если он состоялся), поэтому здесь не нужно (и
+    нельзя) заново решать, какой раунд считать: это уже решено там, откуда
+    приходит `results`, и пересчитывать по source/тексту ошибки значило бы
+    завести второй источник истины рядом с `ProposalProvenance.fallback_used`.
+    """
+    return sum(
+        int(result.production_fallback_used) + int(result.injection_fallback_used)
+        for result in results
+    )
+
+
 def _committed_action_controls(runtime, candidate):
     """Полные управления, встающие в эпоху кандидата.
 
@@ -469,7 +486,7 @@ def run_mas_variant(
         control_change_count=len(committed.producers) + len(committed.injectors),
         decision_steps=len(results),
         round2_count=sum(1 for result in results if result.round2_triggered),
-        fallback_count=0,
+        fallback_count=fallback_count(results),
         chdd_result_digest=digest(selected.chdd.result.to_json()),
         wall_duration_seconds=round(time.monotonic() - started, 3),
         extra={

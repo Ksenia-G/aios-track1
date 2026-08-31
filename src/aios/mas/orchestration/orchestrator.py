@@ -404,6 +404,13 @@ class DecisionStepResult:
     committed_candidate: MagnitudeCandidate
     selection: EconomicSelectionResult
     next_state: StateCard
+    # Провенанс ИМЕННО того specialist-вывода, что дошёл до Arbiter на этом
+    # шаге (после Round 2, если он был): раньше эти булевы терялись между
+    # `_run_specialist_rounds` и `DecisionStepResult` -- дальше по конвейеру
+    # сохранялись только дайджесты envelope, а не `ProposalProvenance`, и
+    # count фолбэков ниже по стеку не из чего было честно посчитать.
+    production_fallback_used: bool
+    injection_fallback_used: bool
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
@@ -416,6 +423,8 @@ class DecisionStepResult:
             "committed_candidate": self.committed_candidate.to_json(),
             "selection": self.selection.to_json(),
             "next_state_digest": self.next_state.digest(),
+            "production_fallback_used": self.production_fallback_used,
+            "injection_fallback_used": self.injection_fallback_used,
         }
 
 
@@ -577,6 +586,12 @@ class ClosedLoopOrchestrator:
             arbiter_decision=arbiter_decision,
             round2_triggered=round2_triggered,
             step_input=step_input,
+            # Провенанс ИМЕННО этого раунда: если Round 2 состоялся,
+            # `production_output`/`injection_output` уже переприсвоены его
+            # выводом выше -- ретрай Round 1, чей ответ Arbiter не увидел,
+            # фолбэком здесь не считается.
+            production_fallback_used=production_output.primary_proposal.provenance.fallback_used,
+            injection_fallback_used=injection_output.primary_proposal.provenance.fallback_used,
         )
         if self._decision_trace is not None:
             self._decision_trace.append(result)
@@ -797,6 +812,8 @@ class ClosedLoopOrchestrator:
         arbiter_decision: ArbiterDecision,
         round2_triggered: bool,
         step_input: DecisionStepInput,
+        production_fallback_used: bool,
+        injection_fallback_used: bool,
     ) -> DecisionStepResult:
         # Каждый кандидат исполняется ровно один раз, и его прогон
         # принимается только вместе с провенансом, который называет именно
@@ -902,6 +919,8 @@ class ClosedLoopOrchestrator:
             committed_candidate=committed_candidate,
             selection=selection,
             next_state=next_state,
+            production_fallback_used=production_fallback_used,
+            injection_fallback_used=injection_fallback_used,
         )
 
 

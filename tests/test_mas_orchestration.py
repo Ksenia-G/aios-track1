@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from dataclasses import replace
 
 import pytest
 
@@ -20,6 +21,7 @@ from aios.mas.orchestration import (
     OrchestratorConfig,
     default_next_input,
 )
+from aios.mas.proposals import InjectionAgentOutput, ProductionAgentOutput, ProposalProvenance
 from aios.schedule import InjectorControl, ProducerControl, WellStatus
 from tests.support.mas_team_fixtures import (
     SCHEMA_VERSION,
@@ -27,8 +29,12 @@ from tests.support.mas_team_fixtures import (
     SYNTHETIC_VARIANT_ID,
     synthetic_horizon_context,
     synthetic_injection_agent_output,
+    synthetic_injection_envelope,
+    synthetic_injection_proposal,
     synthetic_memory_slice,
     synthetic_production_agent_output,
+    synthetic_production_envelope,
+    synthetic_production_proposal,
     synthetic_state_card,
 )
 from tests.support.orchestration_doubles import (
@@ -51,22 +57,30 @@ RESOLVER_VERSION = "tests.support.orchestration/1.0.0"
 
 
 class StubProductionAgent:
-    def __init__(self, *, llm_enabled: bool = False) -> None:
+    def __init__(self, *, llm_enabled: bool = False, outputs: object = None) -> None:
         self.llm_enabled = llm_enabled
         self.envelopes: list[object] = []
+        # One output per call, in order (e.g. Round 1 then Round 2); falls
+        # back to the default synthetic output once/if exhausted.
+        self._outputs = list(outputs) if outputs is not None else None
 
     def propose(self, envelope: object) -> object:
         self.envelopes.append(envelope)
+        if self._outputs:
+            return self._outputs.pop(0)
         return synthetic_production_agent_output()
 
 
 class StubInjectionAgent:
-    def __init__(self, *, llm_enabled: bool = False) -> None:
+    def __init__(self, *, llm_enabled: bool = False, outputs: object = None) -> None:
         self.llm_enabled = llm_enabled
         self.envelopes: list[object] = []
+        self._outputs = list(outputs) if outputs is not None else None
 
     def propose(self, envelope: object) -> object:
         self.envelopes.append(envelope)
+        if self._outputs:
+            return self._outputs.pop(0)
         return synthetic_injection_agent_output()
 
 
@@ -675,6 +689,84 @@ def test_round1_is_isolated_and_round2_carries_the_peer() -> None:
     assert injection.envelopes[1].peer_proposals[0].role.value == "PRODUCTION"
 
 
+# ---------------------------------------------------------------------------
+# Fallback provenance reaches DecisionStepResult (MAS-FALLBACK-ACCOUNTING-001).
+# ---------------------------------------------------------------------------
+
+
+def _production_output(*, fallback_used: bool) -> ProductionAgentOutput:
+    envelope_digest = synthetic_production_envelope().digest()
+    primary = replace(
+        synthetic_production_proposal(envelope_digest=envelope_digest),
+        provenance=ProposalProvenance(fallback_used=fallback_used),
+    )
+    return ProductionAgentOutput(
+        primary_proposal=primary,
+        baseline_proposal=synthetic_production_proposal(
+            envelope_digest=envelope_digest, source=ProposalSource.DETERMINISTIC_BASELINE
+        ),
+    )
+
+
+def _injection_output(*, fallback_used: bool) -> InjectionAgentOutput:
+    envelope_digest = synthetic_injection_envelope().digest()
+    primary = replace(
+        synthetic_injection_proposal(envelope_digest=envelope_digest),
+        provenance=ProposalProvenance(fallback_used=fallback_used),
+    )
+    return InjectionAgentOutput(
+        primary_proposal=primary,
+        baseline_proposal=synthetic_injection_proposal(
+            envelope_digest=envelope_digest, source=ProposalSource.DETERMINISTIC_BASELINE
+        ),
+    )
+
+
+def test_decision_step_result_reports_each_specialists_actual_fallback_state() -> None:
+    """The authoritative boolean, not source strings: one true, one false."""
+    production = StubProductionAgent(outputs=[_production_output(fallback_used=True)])
+    injection = StubInjectionAgent(outputs=[_injection_output(fallback_used=False)])
+    orchestrator = _orchestrator(production_agent=production, injection_agent=injection)
+
+    result = orchestrator.run_decision_step(_step_input())
+
+    assert result.production_fallback_used is True
+    assert result.injection_fallback_used is False
+
+
+def test_round2_result_reports_the_final_rounds_fallback_state() -> None:
+    """F7/F8: Round 1 fell back, Round 2 (the one Arbiter actually saw) did
+    not -- the result must report False, not True. A retry that eventually
+    lands on a live response must not be counted as a fallback, and Round
+    1's discarded provenance must not leak into the count."""
+    production = StubProductionAgent(
+        outputs=[
+            _production_output(fallback_used=True),  # Round 1: fell back
+            _production_output(fallback_used=False),  # Round 2: live, used by Arbiter
+        ]
+    )
+    injection = StubInjectionAgent(
+        outputs=[
+            _injection_output(fallback_used=False),
+            _injection_output(fallback_used=False),
+        ]
+    )
+
+    def always_conflict(production_output: object, injection_output: object) -> bool:
+        return True
+
+    orchestrator = _orchestrator(
+        production_agent=production,
+        injection_agent=injection,
+        conflict_predicate=always_conflict,
+    )
+    result = orchestrator.run_decision_step(_step_input())
+
+    assert result.round2_triggered is True
+    assert result.production_fallback_used is False
+    assert result.injection_fallback_used is False
+
+
 def test_at_most_one_round2_per_step() -> None:
     from aios.mas.arbiter import Round2Request
     from aios.mas.common import AgentRole
@@ -693,6 +785,60 @@ def test_at_most_one_round2_per_step() -> None:
     )
     with pytest.raises(OrchestrationError, match="at most one Round 2"):
         orchestrator.run_decision_step(_step_input())
+
+
+def test_three_step_run_carries_fallback_independently_per_epoch() -> None:
+    """F4 at the real orchestrator level: T0 P=false I=true, T1 P=true
+    I=false, T2 P=true I=true -- each DecisionStepResult must report exactly
+    its own epoch's provenance, matching aios.benchmark.mas_variant.fallback_count's
+    contract of counting decisions, not epochs (T2 alone contributes 2)."""
+    base_state = synthetic_state_card()
+    extractor = DeterministicRealizedStateExtractor(base_state=base_state)
+    production = StubProductionAgent(
+        outputs=[
+            _production_output(fallback_used=False),
+            _production_output(fallback_used=True),
+            _production_output(fallback_used=True),
+        ]
+    )
+    injection = StubInjectionAgent(
+        outputs=[
+            _injection_output(fallback_used=True),
+            _injection_output(fallback_used=False),
+            _injection_output(fallback_used=True),
+        ]
+    )
+    orchestrator = _orchestrator(
+        production_agent=production,
+        injection_agent=injection,
+        candidate_executor=DeterministicCandidateExecutor(),
+        realized_state_extractor=extractor,
+        state_advancer=CommittedControlsStateAdvancer(extractor=extractor),
+    )
+
+    # Each step's HOLD candidate must be an exact carry-forward (T6) of what
+    # the previous step actually committed, so the resolver's hold_controls
+    # is re-pointed at the prior commit before each subsequent step -- same
+    # pattern as test_two_sequential_steps_form_a_real_closed_loop.
+    results = []
+    current_input = _step_input()
+    for _ in range(3):
+        result = orchestrator.run_decision_step(current_input)
+        results.append(result)
+        committed = result.committed_candidate.canonical()
+        orchestrator._magnitude_resolver = StubMagnitudeResolver(
+            hold_controls=(
+                committed.producers[0].liquid_rate or 0.0,
+                committed.injectors[0].surface_rate or 0.0,
+            )
+        )
+        current_input = default_next_input(current_input, result)
+
+    assert [r.production_fallback_used for r in results] == [False, True, True]
+    assert [r.injection_fallback_used for r in results] == [True, False, True]
+    from aios.benchmark.mas_variant import fallback_count
+
+    assert fallback_count(results) == 4
 
 
 # ---------------------------------------------------------------------------
