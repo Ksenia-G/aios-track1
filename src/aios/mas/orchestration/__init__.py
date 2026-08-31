@@ -28,6 +28,7 @@ from aios.mas.orchestration.composition import (
     RealClosedLoopComposition,
     RealizedStateAdvancer,
     build_real_closed_loop,
+    report_step_for,
 )
 from aios.mas.orchestration.orchestrator import (
     CandidateRecord,
@@ -76,4 +77,5 @@ __all__ = [
     "default_next_input",
     "identity_pre_action_validator",
     "never_conflict",
+    "report_step_for",
 ]

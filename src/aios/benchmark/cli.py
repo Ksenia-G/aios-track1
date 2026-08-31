@@ -62,8 +62,17 @@ def _initial_state_card(context: BenchmarkContext):
 
     Берётся из опорного расписания того же кейса, чтобы MAS начинал ровно с
     той же точки, что и варианты с фиксированным расписанием.
+
+    `evaluate_schedule_text` прогоняет ПОЛНУЮ историю плюс опорное расписание
+    окна, поэтому её сводка кончается в H, а не в T0. Без явного `step=` here
+    `StateExtractor` брал бы последний отчётный шаг -- состояние на конец
+    горизонта -- и выдавал бы его специалистам за состояние решения на T0:
+    решение "на T0" читало бы будущее. Отчётный шаг ищется той же самой
+    date->step функцией, которой уже находит свою эпоху середина контура
+    (`aios.mas.orchestration.report_step_for`), а не отдельным magic index.
     """
     from aios.benchmark.adapters import evaluate_schedule_text
+    from aios.mas.orchestration import report_step_for
     from aios.state.extractor import StateExtractor, well_controls_from_schedule
 
     schedule, schedule_text = build_baseline(context)
@@ -82,6 +91,7 @@ def _initial_state_card(context: BenchmarkContext):
         schedule_hash=evaluation.schedule_sha,
         well_controls=controls,
         geology=context.geology(),
+        step=report_step_for(evaluation.summary, context.case.management_start_date),
     )
 
 

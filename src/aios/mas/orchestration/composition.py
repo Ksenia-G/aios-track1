@@ -147,12 +147,19 @@ class OpmRealizedStateExtractor:
             schedule_hash=execution.provenance.schedule_sha256,
             well_controls=controls,
             geology=self.geology,
-            step=_report_step_for(summary, next_epoch),
+            step=report_step_for(summary, next_epoch),
         )
 
 
-def _report_step_for(summary, moment: date | None) -> int:
-    """Индекс отчётного шага на дату ``moment``; -1 -- конец горизонта."""
+def report_step_for(summary, moment: date | None) -> int:
+    """Индекс отчётного шага на дату ``moment``; -1 -- конец горизонта.
+
+    Единственный источник даты->шаг для реального контура: середина прогона
+    (T1/T2/...) уже находила свою эпоху через эту функцию, и стартовое
+    состояние обязано находить T0 тем же способом, а не отдельным magic
+    index -- иначе у двух причинно-связанных точек контура было бы два
+    независимых, потенциально расходящихся понятия "какой это шаг".
+    """
     if moment is None:
         return -1
     for index, stamp in enumerate(summary.dates):

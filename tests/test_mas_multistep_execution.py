@@ -200,7 +200,7 @@ def test_report_step_lookup_is_exact_and_fails_closed() -> None:
     """Состояние снимается на ТОЧНОЙ отчётной дате, иначе отказ."""
     import datetime as _dt
 
-    from aios.mas.orchestration.composition import CompositionError, _report_step_for
+    from aios.mas.orchestration.composition import CompositionError, report_step_for
 
     class _Summary:
         dates = tuple(
@@ -208,11 +208,11 @@ def test_report_step_lookup_is_exact_and_fails_closed() -> None:
             for d in GRID
         )
 
-    assert _report_step_for(_Summary(), None) == -1
-    assert _report_step_for(_Summary(), GRID[8]) == 8
-    assert _report_step_for(_Summary(), GRID[15]) == 15
+    assert report_step_for(_Summary(), None) == -1
+    assert report_step_for(_Summary(), GRID[8]) == 8
+    assert report_step_for(_Summary(), GRID[15]) == 15
     with pytest.raises(CompositionError):
-        _report_step_for(_Summary(), datetime.date(2014, 9, 15))
+        report_step_for(_Summary(), datetime.date(2014, 9, 15))
 
 
 # ===========================================================================
