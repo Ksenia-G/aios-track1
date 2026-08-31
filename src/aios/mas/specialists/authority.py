@@ -244,7 +244,7 @@ def is_prescriptive_key(key: object, *, section: str | None = None) -> bool:
 
 
 def _is_prescriptive_pairing(key: object, value: object) -> bool:
-    """Предписывающее слово, которому присвоена величина.
+    """Предписывающее слово, которому присвоена величина -- на этом же уровне.
 
     Различает не имя, а пару имя+значение. `target` в реальной диагностике --
     это ссылка на скважину или регион, и такой факт обязан проходить;
@@ -259,6 +259,11 @@ def _is_prescriptive_pairing(key: object, value: object) -> bool:
     закрывался только для скаляров, и `"240 m3/day"` проходил насквозь.
     Различает не тип значения, а наличие в нём standalone-величины, поэтому
     идентификатор с цифрами (SYN-I1, SYN-B2, I10) остаётся фактом.
+
+    Величина может быть обёрнута в контейнер (`{"target": [240]}`,
+    `{"target": [{"value": "240 m3/day"}]}`): это ловит уже сам
+    `find_prescriptive_control` через `under_prescriptive_key`, а не эта
+    функция -- она отвечает только за прямую пару на одном уровне.
     """
     if _normalize_key(key) not in _PRESCRIPTIVE_PREFIXES:
         return False
@@ -271,29 +276,68 @@ def _is_prescriptive_pairing(key: object, value: object) -> bool:
     return False
 
 
+def _is_bare_magnitude(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, int | float)
+
+
 def find_prescriptive_control(
-    value: object, path: str = "payload", *, section: str | None = None
+    value: object,
+    path: str = "payload",
+    *,
+    section: str | None = None,
+    under_prescriptive_key: bool = False,
 ) -> str | None:
     """Первое место в payload, несущее prescriptive control, или None.
 
     Открытый мир: незнакомый ключ сам по себе нарушением не является -- иначе
     любое расширение схемы diagnostics ломало бы специалиста.
+
+    `under_prescriptive_key` -- унаследованный от родителя признак «мы уже
+    внутри значения предписывающего имени» (`target`, `set`, `new`, ...). Раз
+    войдя туда, признак не гаснет на промежуточных списках и словарях: список
+    и вложенный объект -- это всё ещё то же самое значение поля, просто
+    записанное не скаляром, и величина внутри него -- всё тот же setpoint.
+    Идентификатор (`"SYN-I1"`) величины не содержит и потому остаётся фактом
+    даже под этим признаком -- различает не контейнер, а наличие в листе
+    standalone-величины.
     """
     if isinstance(value, Mapping):
         for key, item in value.items():
+            normalized_key = _normalize_key(key)
+            key_is_prescriptive = normalized_key in _PRESCRIPTIVE_PREFIXES
             if is_prescriptive_key(key, section=section) or _is_prescriptive_pairing(key, item):
                 return f"{path}.{key}"
-            found = find_prescriptive_control(item, f"{path}.{key}", section=_normalize_key(key))
+            found = find_prescriptive_control(
+                item,
+                f"{path}.{key}",
+                section=normalized_key,
+                under_prescriptive_key=under_prescriptive_key or key_is_prescriptive,
+            )
             if found is not None:
                 return found
         return None
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
         for index, item in enumerate(value):
-            found = find_prescriptive_control(item, f"{path}[{index}]", section=section)
+            if under_prescriptive_key and _is_bare_magnitude(item):
+                return f"{path}[{index}]"
+            found = find_prescriptive_control(
+                item,
+                f"{path}[{index}]",
+                section=section,
+                under_prescriptive_key=under_prescriptive_key,
+            )
             if found is not None:
                 return found
         return None
-    if isinstance(value, str) and contains_prescriptive_text(value):
+    if isinstance(value, str):
+        if under_prescriptive_key and contains_numeric_magnitude(value):
+            return path
+        if contains_prescriptive_text(value):
+            return path
+        return None
+    if under_prescriptive_key and _is_bare_magnitude(value):
         return path
     return None
 
