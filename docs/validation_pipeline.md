@@ -163,3 +163,18 @@ tNavigator массу жидкости той же суммой или испо�
 Открыты также вопросы, не влияющие на воспроизводимость контура, но влияющие
 на трактовку результата: считается ли 11-месячный 2015 год полным при
 дисконтировании и бесплатен ли начальный парк ЭЦН на 01.01.2014.
+
+
+## MAS foundation contracts
+
+`wells_schedule.inc` is now a production submission artefact, not only the
+management window. The immutable history prefix is copied byte-for-byte from
+the configured source schedule and the generated management section is appended
+after the handover date. A claimed result is published only after a clean full
+run; restart chains are optional execution optimizations and cannot be the
+source of `claimed_npv.json`.
+
+Case constraints distinguish official realized trajectory checks from search
+or command bounds. Training Model Y configures `compensation_gate` as
+`NOT_APPLICABLE`; a future case that requires compensation without a configured
+formula must fail with `COMPENSATION_DEFINITION_UNRESOLVED`.

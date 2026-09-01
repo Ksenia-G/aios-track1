@@ -9,6 +9,7 @@
 подменой соответствующих вызовов.
 """
 
+import datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -18,16 +19,19 @@ import pytest
 from aios.chdd.runner import ChddError
 from aios.chdd.trajectory import ChddInput, TrajectoryStats
 from aios.opm.runner import OpmRunResult
-from aios.opm.summary import SummaryReadError
+from aios.opm.summary import SummaryData, SummaryReadError
 from aios.opm.workspace import prepare_workspace
 from aios.pipeline import (
     CLAIMED_NPV_FILENAME,
+    CONSTRAINT_REPORT_FILENAME,
     FINAL_ARTIFACTS,
     RUN_MANIFEST_FILENAME,
     SCHEDULE_FILENAME,
+    STATE_CARD_ARTIFACT_ROOT,
     STATUS_FAILED,
     VALIDATION_REPORT_FILENAME,
     VERDICT_BLOCKED,
+    YEARLY_NPV_PROFILE_FILENAME,
     invalidate_package,
     run_validation_pipeline,
 )
@@ -46,11 +50,22 @@ def seed_previous_success(output_dir: Path) -> dict[str, Path]:
         json.dumps({"case_id": "mini", "npv_mln_rub": STALE_NPV, "simulation_status": "PASS"}),
         "utf-8",
     )
+    paths[YEARLY_NPV_PROFILE_FILENAME].write_text(
+        json.dumps({"status": "PASSED", "total_npv_mln_rub": STALE_NPV}), "utf-8"
+    )
+    paths[CONSTRAINT_REPORT_FILENAME].write_text(
+        json.dumps({"status": "PASS", "realized_constraints_status": "PASS"}), "utf-8"
+    )
     paths[VALIDATION_REPORT_FILENAME].write_text(
         json.dumps({"status": "PASSED", "verdict": "READY", "npv": STALE_NPV}), "utf-8"
     )
     paths[RUN_MANIFEST_FILENAME].write_text(
         json.dumps({"status": "PASSED", "verdict": "READY"}), "utf-8"
+    )
+    state_dir = paths[STATE_CARD_ARTIFACT_ROOT] / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "state_card_2020_04_01.json").write_text(
+        json.dumps({"canonical_digest": "stale"}), encoding="utf-8"
     )
     return paths
 
@@ -87,6 +102,53 @@ def _passing_opm_result(tmp_path: Path) -> OpmRunResult:
     )
 
 
+def _model_time(year: int, month: int, day: int) -> datetime.datetime:
+    return datetime.datetime(year, month, day)  # noqa: DTZ001
+
+
+def _stub_summary() -> SummaryData:
+    fields = {
+        "FPR": 0,
+        "FOPR": 1,
+        "FWPR": 2,
+        "FLPR": 3,
+        "FWIR": 4,
+        "FVPR": 5,
+        "FVPT": 6,
+    }
+    vectors = ("WBHP", "WLPR", "WOPR", "WWPR", "WWIR", "WWCT", "WOPT", "WWPT", "WWIT")
+    wells = ("P1", "P2", "I1")
+    well_index: dict[tuple[str, str], int] = {}
+    column = len(fields)
+    values: list[float] = [211.5, 220.0, 80.0, 300.0, 150.0, 325.0, 2500.0]
+    for well in wells:
+        for vector in vectors:
+            well_index[(vector, well)] = column
+            column += 1
+            values.append(
+                {
+                    "WBHP": 55.0 if well != "I1" else 250.0,
+                    "WLPR": 100.0 if well != "I1" else 0.0,
+                    "WOPR": 80.0 if well != "I1" else 0.0,
+                    "WWPR": 20.0 if well != "I1" else 0.0,
+                    "WWIR": 0.0 if well != "I1" else 150.0,
+                    "WWCT": 0.2 if well != "I1" else 0.0,
+                    "WOPT": 1000.0 if well != "I1" else 0.0,
+                    "WWPT": 100.0 if well != "I1" else 0.0,
+                    "WWIT": 0.0 if well != "I1" else 1000.0,
+                }[vector]
+            )
+    return SummaryData(
+        start=_model_time(2020, 1, 1),
+        dates=(_model_time(2020, 4, 1),),
+        wells=wells,
+        units={},
+        _field_index=fields,
+        _well_index=well_index,
+        _params=(tuple(values),),
+    )
+
+
 def _stub_chdd_input() -> ChddInput:
     return ChddInput(
         headers=("DATA", "well"),
@@ -120,7 +182,7 @@ def _reach_chdd_stage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         validation_module,
         "run_simulation",
-        lambda case, workspace: (_passing_opm_result(tmp_path), object()),
+        lambda case, workspace: (_passing_opm_result(tmp_path), _stub_summary()),
     )
     monkeypatch.setattr(
         validation_module, "build_chdd_input", lambda summary, case: _stub_chdd_input()

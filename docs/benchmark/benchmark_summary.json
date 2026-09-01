@@ -1,0 +1,532 @@
+{
+  "outcomes": [
+    {
+      "chdd_result_digest": "4c4bb1e3778264f63bbd54cd25ac4c0d295c914852b78eac5349c101f956462e",
+      "control_change_count": 120,
+      "decision_steps": 1,
+      "extra": {
+        "report_steps": 108,
+        "well_count": 49
+      },
+      "fallback_count": 0,
+      "guardian_check_count": 82,
+      "guardian_failed_count": 0,
+      "guardian_pass": true,
+      "manifest": {
+        "benchmark_schema_version": "aios.benchmark/1.0.0",
+        "code_sha": "efa627b6b5fee1bbe0ad1254a5ba719dfc0119e1",
+        "cognitive": {
+          "llm_enabled": false,
+          "model_id": null,
+          "provider_id": null,
+          "run_id": null,
+          "seed": null
+        },
+        "frame": {
+          "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+          "case_id": "model_y_validation",
+          "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+          "chdd_month_count": null,
+          "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+          "deck_digest": null,
+          "deck_reference": "${MODEL_Y_ROOT}",
+          "effective_end": "2015-12-01",
+          "effective_start": "2014-01-01",
+          "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+          "initial_state_digest": "74bbad9e53dcd8aa0671ab99724d923019f895995612ef6cf9ae697d020c284a",
+          "runtime_mode": "FULL",
+          "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff"
+        },
+        "lineage": [
+          {
+            "chdd_input_digest": "1c05862f08625bf586a3762efe255c5a7249628f57206acbff970a91e8afa548",
+            "realized_state_digest": "250bd5284150631a44ef2b2cf06640caf35b1874f60a74d92d71c644ad3c8150",
+            "request_digest": null,
+            "result_digest": null,
+            "schedule_digest": "7662d10495796ace6b0d20df404ca68932b2894f367de2062c232cbe3e01c399",
+            "simulation_key": null
+          }
+        ],
+        "notes": [
+          "recorded_schedule_sha256=7662d10495796ace6b0d20df404ca68932b2894f367de2062c232cbe3e01c399",
+          "schedule reproduced bit-exactly from the recorded scenario",
+          "recorded_npv_mln_rub=1030.8776958837277"
+        ],
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "source_reference": "experiments/exp001/baseline.json",
+        "variant_family": "BASELINE",
+        "variant_id": "B0_BASELINE"
+      },
+      "manifest_digest": "8de14573467b7f8dcfd71e8993ebe30b5f0e8abc361f5997d429b182a7a1802e",
+      "npv_mln_rub": 1030.8776958837277,
+      "policy_failure_count": 0,
+      "rankable": true,
+      "round2_count": 0,
+      "simulation_count": 1,
+      "wall_duration_seconds": 79.665,
+      "yearly_profile_digest": "1553466357ef20568db6cbdb8390a32baaad7bd713c7c71e70b7cb5e1cf0bc2d"
+    },
+    {
+      "chdd_result_digest": "2e30b4e08ddd18ee51dda2165e77759770b9f105efd1a07cf1d49c2b0656d866",
+      "control_change_count": 144,
+      "decision_steps": 1,
+      "extra": {
+        "report_steps": 108,
+        "well_count": 49
+      },
+      "fallback_count": 0,
+      "guardian_check_count": 82,
+      "guardian_failed_count": 0,
+      "guardian_pass": true,
+      "manifest": {
+        "benchmark_schema_version": "aios.benchmark/1.0.0",
+        "code_sha": "efa627b6b5fee1bbe0ad1254a5ba719dfc0119e1",
+        "cognitive": {
+          "llm_enabled": false,
+          "model_id": null,
+          "provider_id": null,
+          "run_id": null,
+          "seed": null
+        },
+        "frame": {
+          "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+          "case_id": "model_y_validation",
+          "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+          "chdd_month_count": null,
+          "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+          "deck_digest": null,
+          "deck_reference": "${MODEL_Y_ROOT}",
+          "effective_end": "2015-12-01",
+          "effective_start": "2014-01-01",
+          "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+          "initial_state_digest": "74bbad9e53dcd8aa0671ab99724d923019f895995612ef6cf9ae697d020c284a",
+          "runtime_mode": "FULL",
+          "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff"
+        },
+        "lineage": [
+          {
+            "chdd_input_digest": "611270267b0d57ea3fb224f97362e6be0435c7aede4988659d91b8559cd93a8d",
+            "realized_state_digest": "00d0877b6641659b5a6da78bcba8278236a6a4f1197de51ff512c50670bf0dd4",
+            "request_digest": null,
+            "result_digest": null,
+            "schedule_digest": "38cc9092fabf69cd1b341ac79c8cfe96f6099b0fd091a750e7944b6e8e64379e",
+            "simulation_key": null
+          }
+        ],
+        "notes": [
+          "recorded_schedule_sha256=b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+          "schedule does NOT reproduce (rebuilt 38cc9092fabf69cd1b341ac79c8cfe96f6099b0fd091a750e7944b6e8e64379e); evaluated as a re-derived candidate under current code, not as the historical artifact",
+          "recorded_npv_mln_rub=1190.5933863822445"
+        ],
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "source_reference": "experiments/exp003/summary.json#key_candidates.MAX_NPV",
+        "variant_family": "EXP003",
+        "variant_id": "B1_EXP003"
+      },
+      "manifest_digest": "fc2fe32a7f6c729008b4b5906debd6fcbad1e98ce15254745d29ad7c6217e430",
+      "npv_mln_rub": 1187.2389585454744,
+      "policy_failure_count": 0,
+      "rankable": true,
+      "round2_count": 0,
+      "simulation_count": 1,
+      "wall_duration_seconds": 83.367,
+      "yearly_profile_digest": "b3349abf8780f77d6153c1e99983b850f00b69824fe018d25089d48a566af96b"
+    },
+    {
+      "chdd_result_digest": null,
+      "control_change_count": 0,
+      "decision_steps": 0,
+      "extra": {},
+      "fallback_count": 0,
+      "guardian_check_count": 0,
+      "guardian_failed_count": 0,
+      "guardian_pass": true,
+      "manifest": {
+        "benchmark_schema_version": "aios.benchmark/1.0.0",
+        "code_sha": "efa627b6b5fee1bbe0ad1254a5ba719dfc0119e1",
+        "cognitive": {
+          "llm_enabled": false,
+          "model_id": null,
+          "provider_id": null,
+          "run_id": null,
+          "seed": null
+        },
+        "frame": {
+          "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+          "case_id": "model_y_validation",
+          "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+          "chdd_month_count": null,
+          "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+          "deck_digest": null,
+          "deck_reference": "${MODEL_Y_ROOT}",
+          "effective_end": "2015-12-01",
+          "effective_start": "2014-01-01",
+          "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+          "initial_state_digest": "historical",
+          "runtime_mode": "FULL",
+          "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff"
+        },
+        "lineage": [
+          {
+            "chdd_input_digest": null,
+            "realized_state_digest": null,
+            "request_digest": null,
+            "result_digest": null,
+            "schedule_digest": "b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+            "simulation_key": null
+          }
+        ],
+        "notes": [
+          "recorded before render_full_schedule changed supplemental-injection rendering; kept as an ingested reference, never as a fresh run"
+        ],
+        "run_kind": "HISTORICAL_REFERENCE",
+        "source_reference": "experiments/exp003/summary.json#key_candidates.MAX_NPV",
+        "variant_family": "EXP003",
+        "variant_id": "B1_EXP003_HISTORICAL"
+      },
+      "manifest_digest": "d21f02540df6fd40a68f7a42297a9a92607ce02bf3a2b2a70cf78338b514aac9",
+      "npv_mln_rub": 1190.5933863822445,
+      "policy_failure_count": 0,
+      "rankable": true,
+      "round2_count": 0,
+      "simulation_count": 0,
+      "wall_duration_seconds": null,
+      "yearly_profile_digest": null
+    },
+    {
+      "chdd_result_digest": "6f5c6c4ee2e23e1acea26d7b26f9631543dbdfde81a16dea0f8ab9c02d3f1c48",
+      "control_change_count": 211,
+      "decision_steps": 1,
+      "extra": {
+        "report_steps": 109,
+        "well_count": 49
+      },
+      "fallback_count": 0,
+      "guardian_check_count": 82,
+      "guardian_failed_count": 0,
+      "guardian_pass": true,
+      "manifest": {
+        "benchmark_schema_version": "aios.benchmark/1.0.0",
+        "code_sha": "efa627b6b5fee1bbe0ad1254a5ba719dfc0119e1",
+        "cognitive": {
+          "llm_enabled": false,
+          "model_id": null,
+          "provider_id": null,
+          "run_id": null,
+          "seed": null
+        },
+        "frame": {
+          "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+          "case_id": "model_y_validation",
+          "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+          "chdd_month_count": null,
+          "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+          "deck_digest": null,
+          "deck_reference": "${MODEL_Y_ROOT}",
+          "effective_end": "2015-12-01",
+          "effective_start": "2014-01-01",
+          "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+          "initial_state_digest": "74bbad9e53dcd8aa0671ab99724d923019f895995612ef6cf9ae697d020c284a",
+          "runtime_mode": "FULL",
+          "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff"
+        },
+        "lineage": [
+          {
+            "chdd_input_digest": "fc4841201c392d2790164483eda6e90b33164de418383679376d5da66ccf149d",
+            "realized_state_digest": "30536681e2a1a1b2982616fae82601e7eccdd61a84288ef9c8d7071b43f30656",
+            "request_digest": null,
+            "result_digest": null,
+            "schedule_digest": "309b5171f5effbdd07d939821934536f87ed5ffe4f8c34380d0cf98ea2807e46",
+            "simulation_key": null
+          }
+        ],
+        "notes": [
+          "recorded_schedule_sha256=309b5171f5effbdd07d939821934536f87ed5ffe4f8c34380d0cf98ea2807e46",
+          "schedule reproduced bit-exactly from the recorded scenario",
+          "recorded_npv_mln_rub=1826.267931654948"
+        ],
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "source_reference": "experiments/exp004/best_candidate.json",
+        "variant_family": "EXP004",
+        "variant_id": "B2_EXP004"
+      },
+      "manifest_digest": "6f2b8039bd4fb36ba99ec6690789fe7021d861d57027ba8be6765639740ac207",
+      "npv_mln_rub": 1826.267931654948,
+      "policy_failure_count": 0,
+      "rankable": true,
+      "round2_count": 0,
+      "simulation_count": 1,
+      "wall_duration_seconds": 82.766,
+      "yearly_profile_digest": "9e9e518af269f55413099fc805a6371e368c60a4289d02f63cba7aa8d392feec"
+    },
+    {
+      "chdd_result_digest": "9e607d73beb3a1308321e0f492676af7e76d5bfe6cf456b93f197ef8b9673762",
+      "control_change_count": 49,
+      "decision_steps": 1,
+      "extra": {
+        "committed_candidate_digest": "c32114c0b7e25a297a9ffed790b25ba1787b530da4899b6a386be4ac291af754",
+        "rejected": [],
+        "selection_rule": "economic_argmax_chdd_v1"
+      },
+      "fallback_count": 0,
+      "guardian_check_count": 0,
+      "guardian_failed_count": 0,
+      "guardian_pass": true,
+      "manifest": {
+        "benchmark_schema_version": "aios.benchmark/1.0.0",
+        "code_sha": "efa627b6b5fee1bbe0ad1254a5ba719dfc0119e1",
+        "cognitive": {
+          "llm_enabled": false,
+          "model_id": null,
+          "provider_id": null,
+          "run_id": null,
+          "seed": null
+        },
+        "frame": {
+          "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+          "case_id": "model_y_validation",
+          "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+          "chdd_month_count": null,
+          "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+          "deck_digest": null,
+          "deck_reference": "${MODEL_Y_ROOT}",
+          "effective_end": "2015-12-01",
+          "effective_start": "2014-01-01",
+          "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+          "initial_state_digest": "cc6c7410d2bae8d97dee32d69bacf797615090a71ffc71ad464e448f18474b34",
+          "runtime_mode": "FULL",
+          "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff"
+        },
+        "lineage": [
+          {
+            "chdd_input_digest": "3b9daa78a40a495cab31ba68eea6e6b12b1b2d5283ecf45c899068b6674415b5",
+            "realized_state_digest": "ab60bf8480486f54b72f82808f7333790a3c18f801b15b7ba478e2dce52a4254",
+            "request_digest": null,
+            "result_digest": null,
+            "schedule_digest": "c32114c0b7e25a297a9ffed790b25ba1787b530da4899b6a386be4ac291af754",
+            "simulation_key": null
+          }
+        ],
+        "notes": [],
+        "run_kind": "CLOSED_LOOP_POLICY",
+        "source_reference": "aios.mas.orchestration.build_real_closed_loop",
+        "variant_family": "MAS_OFF",
+        "variant_id": "B3_MAS_OFF"
+      },
+      "manifest_digest": "53644022014564581a00d6dbd4c70b45f87dd287b6349d57f63fac15d6624919",
+      "npv_mln_rub": 1028.2095701571234,
+      "policy_failure_count": 0,
+      "rankable": true,
+      "round2_count": 0,
+      "simulation_count": 2,
+      "wall_duration_seconds": 165.156,
+      "yearly_profile_digest": null
+    }
+  ],
+  "provider": {
+    "available": false,
+    "model_id": null,
+    "provider_id": null,
+    "reason": "no approved cognitive provider is configured: AIOS_LLM_PROVIDER and AIOS_LLM_MODEL are unset, and the project's .env.example declares only MODEL_Y_ROOT and CHDD_ROOT"
+  },
+  "scoreboard": {
+    "comparisons_vs_reference": [
+      {
+        "claimable": true,
+        "comparison_class": "DIRECT_COMPARABLE",
+        "delta_npv_mln_rub": 156.36126266174665,
+        "delta_pct": 15.167780163068207,
+        "left_variant_id": "B1_EXP003",
+        "reasons": [],
+        "right_variant_id": "B0_BASELINE",
+        "win_claimable": true
+      },
+      {
+        "claimable": false,
+        "comparison_class": "REFERENCE_ONLY",
+        "delta_npv_mln_rub": 159.71569049851678,
+        "delta_pct": 15.493175488834229,
+        "left_variant_id": "B1_EXP003_HISTORICAL",
+        "reasons": [
+          "at least one side is an ingested historical record rather than a run reproduced under this frame"
+        ],
+        "right_variant_id": "B0_BASELINE",
+        "win_claimable": false
+      },
+      {
+        "claimable": true,
+        "comparison_class": "DIRECT_COMPARABLE",
+        "delta_npv_mln_rub": 795.3902357712202,
+        "delta_pct": 77.1566053807543,
+        "left_variant_id": "B2_EXP004",
+        "reasons": [],
+        "right_variant_id": "B0_BASELINE",
+        "win_claimable": true
+      },
+      {
+        "claimable": true,
+        "comparison_class": "NORMALIZED_COMPARABLE",
+        "delta_npv_mln_rub": -2.6681257266043303,
+        "delta_pct": -0.2588207832275447,
+        "left_variant_id": "B3_MAS_OFF",
+        "reasons": [
+          "frame differs in normalisable fields: initial_state_digest",
+          "different run kinds (CLOSED_LOOP_POLICY vs FIXED_SCHEDULE_REPLAY): a fixed schedule is evaluated once over the horizon while a closed loop decides step by step and produces its own"
+        ],
+        "right_variant_id": "B0_BASELINE",
+        "win_claimable": true
+      }
+    ],
+    "fairness_matrix": {
+      "B0_BASELINE": {
+        "B0_BASELINE": "SELF",
+        "B1_EXP003": "DIRECT_COMPARABLE",
+        "B1_EXP003_HISTORICAL": "REFERENCE_ONLY",
+        "B2_EXP004": "DIRECT_COMPARABLE",
+        "B3_MAS_OFF": "NORMALIZED_COMPARABLE"
+      },
+      "B1_EXP003": {
+        "B0_BASELINE": "DIRECT_COMPARABLE",
+        "B1_EXP003": "SELF",
+        "B1_EXP003_HISTORICAL": "REFERENCE_ONLY",
+        "B2_EXP004": "DIRECT_COMPARABLE",
+        "B3_MAS_OFF": "NORMALIZED_COMPARABLE"
+      },
+      "B1_EXP003_HISTORICAL": {
+        "B0_BASELINE": "REFERENCE_ONLY",
+        "B1_EXP003": "REFERENCE_ONLY",
+        "B1_EXP003_HISTORICAL": "SELF",
+        "B2_EXP004": "REFERENCE_ONLY",
+        "B3_MAS_OFF": "REFERENCE_ONLY"
+      },
+      "B2_EXP004": {
+        "B0_BASELINE": "DIRECT_COMPARABLE",
+        "B1_EXP003": "DIRECT_COMPARABLE",
+        "B1_EXP003_HISTORICAL": "REFERENCE_ONLY",
+        "B2_EXP004": "SELF",
+        "B3_MAS_OFF": "NORMALIZED_COMPARABLE"
+      },
+      "B3_MAS_OFF": {
+        "B0_BASELINE": "NORMALIZED_COMPARABLE",
+        "B1_EXP003": "NORMALIZED_COMPARABLE",
+        "B1_EXP003_HISTORICAL": "REFERENCE_ONLY",
+        "B2_EXP004": "NORMALIZED_COMPARABLE",
+        "B3_MAS_OFF": "SELF"
+      }
+    },
+    "headline_candidate": "B2_EXP004",
+    "reference_variant_id": "B0_BASELINE",
+    "rows": [
+      {
+        "comparison_class": "DIRECT_COMPARABLE",
+        "control_change_count": 211,
+        "decision_steps": 1,
+        "delta_vs_reference_mln_rub": 795.3902357712202,
+        "delta_vs_reference_pct": 77.1566053807543,
+        "fallback_count": 0,
+        "guardian_failed_count": 0,
+        "guardian_pass": true,
+        "llm_enabled": false,
+        "model_id": null,
+        "notes": [
+          "recorded_schedule_sha256=309b5171f5effbdd07d939821934536f87ed5ffe4f8c34380d0cf98ea2807e46",
+          "schedule reproduced bit-exactly from the recorded scenario",
+          "recorded_npv_mln_rub=1826.267931654948"
+        ],
+        "npv_mln_rub": 1826.267931654948,
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "simulation_count": 1,
+        "variant_family": "EXP004",
+        "variant_id": "B2_EXP004",
+        "win_claimable": true
+      },
+      {
+        "comparison_class": "REFERENCE_ONLY",
+        "control_change_count": 0,
+        "decision_steps": 0,
+        "delta_vs_reference_mln_rub": 159.71569049851678,
+        "delta_vs_reference_pct": 15.493175488834229,
+        "fallback_count": 0,
+        "guardian_failed_count": 0,
+        "guardian_pass": true,
+        "llm_enabled": false,
+        "model_id": null,
+        "notes": [
+          "recorded before render_full_schedule changed supplemental-injection rendering; kept as an ingested reference, never as a fresh run"
+        ],
+        "npv_mln_rub": 1190.5933863822445,
+        "run_kind": "HISTORICAL_REFERENCE",
+        "simulation_count": 0,
+        "variant_family": "EXP003",
+        "variant_id": "B1_EXP003_HISTORICAL",
+        "win_claimable": false
+      },
+      {
+        "comparison_class": "DIRECT_COMPARABLE",
+        "control_change_count": 144,
+        "decision_steps": 1,
+        "delta_vs_reference_mln_rub": 156.36126266174665,
+        "delta_vs_reference_pct": 15.167780163068207,
+        "fallback_count": 0,
+        "guardian_failed_count": 0,
+        "guardian_pass": true,
+        "llm_enabled": false,
+        "model_id": null,
+        "notes": [
+          "recorded_schedule_sha256=b53dc873efadcc1f33de49d755f1c97ec8e0992b5d0685bed929e46b1eb58112",
+          "schedule does NOT reproduce (rebuilt 38cc9092fabf69cd1b341ac79c8cfe96f6099b0fd091a750e7944b6e8e64379e); evaluated as a re-derived candidate under current code, not as the historical artifact",
+          "recorded_npv_mln_rub=1190.5933863822445"
+        ],
+        "npv_mln_rub": 1187.2389585454744,
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "simulation_count": 1,
+        "variant_family": "EXP003",
+        "variant_id": "B1_EXP003",
+        "win_claimable": true
+      },
+      {
+        "comparison_class": "SELF",
+        "control_change_count": 120,
+        "decision_steps": 1,
+        "delta_vs_reference_mln_rub": null,
+        "delta_vs_reference_pct": null,
+        "fallback_count": 0,
+        "guardian_failed_count": 0,
+        "guardian_pass": true,
+        "llm_enabled": false,
+        "model_id": null,
+        "notes": [
+          "recorded_schedule_sha256=7662d10495796ace6b0d20df404ca68932b2894f367de2062c232cbe3e01c399",
+          "schedule reproduced bit-exactly from the recorded scenario",
+          "recorded_npv_mln_rub=1030.8776958837277"
+        ],
+        "npv_mln_rub": 1030.8776958837277,
+        "run_kind": "FIXED_SCHEDULE_REPLAY",
+        "simulation_count": 1,
+        "variant_family": "BASELINE",
+        "variant_id": "B0_BASELINE",
+        "win_claimable": null
+      },
+      {
+        "comparison_class": "NORMALIZED_COMPARABLE",
+        "control_change_count": 49,
+        "decision_steps": 1,
+        "delta_vs_reference_mln_rub": -2.6681257266043303,
+        "delta_vs_reference_pct": -0.2588207832275447,
+        "fallback_count": 0,
+        "guardian_failed_count": 0,
+        "guardian_pass": true,
+        "llm_enabled": false,
+        "model_id": null,
+        "notes": [],
+        "npv_mln_rub": 1028.2095701571234,
+        "run_kind": "CLOSED_LOOP_POLICY",
+        "simulation_count": 2,
+        "variant_family": "MAS_OFF",
+        "variant_id": "B3_MAS_OFF",
+        "win_claimable": true
+      }
+    ]
+  },
+  "suite": "mas-v1.1"
+}

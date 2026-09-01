@@ -24,6 +24,8 @@ from aios.schedule.generator import (
     GENERATOR_VERSION,
     ScheduleRenderError,
     format_number,
+    preserved_history_sha256,
+    render_full_schedule,
     render_schedule,
     schedule_sha256,
 )
@@ -74,7 +76,9 @@ __all__ = [
     "natural_key",
     "parse_schedule_file",
     "parse_start_date",
+    "preserved_history_sha256",
     "reconstruct_state",
+    "render_full_schedule",
     "render_schedule",
     "schedule_sha256",
     "validate_schedule",

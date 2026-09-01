@@ -56,6 +56,7 @@ def _stub_chdd_result() -> ChddResult:
         profitability_index=1.2188,
         economic_month_count=23,
         months_by_year={"2014": 12, "2015": 11},
+        yearly_profile=(),
         start_date="2014-01-01",
         last_economic_month="2015-11",
         source_max_date="2015-11-01",

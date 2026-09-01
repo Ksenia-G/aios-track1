@@ -10,13 +10,18 @@
   },
   "constraints": {
     "producer_wlpr_max": 500.0,
-    "allowed_producer_controls": ["LRAT"],
-    "allowed_injector_controls": ["RATE"],
+    "allowed_producer_controls": [
+      "LRAT"
+    ],
+    "allowed_injector_controls": [
+      "RATE"
+    ],
     "allow_producer_to_injector": false,
     "producer_bhp_min": 50.0,
     "injector_bhp_max": 300.0,
     "injector_rate_max": null,
-    "field_injection_rate_max": null
+    "field_injection_rate_max": null,
+    "compensation_gate": "NOT_APPLICABLE"
   },
   "economics": {
     "calculator_root": "${CHDD_ROOT}",

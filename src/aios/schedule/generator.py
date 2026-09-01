@@ -49,11 +49,23 @@ def format_number(value: float | None) -> str:
     return f"{value:.10g}"
 
 
+def _control_mode_field(mode: str, value: float | None) -> str:
+    """Поле режима WCONPROD/WCONINJE.
+
+    Режим, управляющий по расходу, обязан иметь своё значение: OPM отвергает
+    колоду с `CMODE` без величины ещё при разборе. У закрытой скважины
+    величины нет и быть не должно, поэтому поле режима остаётся дефолтным --
+    численное значение здесь не выдумывается, иначе setpoint появился бы
+    мимо MagnitudeResolver.
+    """
+    return DEFAULTED if value is None else f"'{mode}'"
+
+
 def _producer_line(control: ProducerControl) -> str:
     fields = [
         f"'{control.well}'",
         f"'{control.status}'",
-        f"'{control.mode}'",
+        _control_mode_field(control.mode, control.liquid_rate),
         DEFAULTED,
         DEFAULTED,
         DEFAULTED,
@@ -71,7 +83,7 @@ def _injector_line(control: InjectorControl) -> str:
         f"'{control.well}'",
         f"'{control.phase}'",
         f"'{control.status}'",
-        f"'{control.mode}'",
+        _control_mode_field(control.mode, control.surface_rate),
         format_number(control.surface_rate),
         DEFAULTED,
         format_number(control.bhp_limit),
@@ -101,7 +113,7 @@ def _step_lines(step: ScheduleStep) -> list[str]:
 
 
 def render_schedule(schedule: Schedule, case: Case, *, policy_id: str) -> str:
-    """Собрать текст `wells_schedule.inc`."""
+    """Собрать текст управляемого окна `wells_schedule.inc`."""
 
     canonical = schedule.canonical()
     if not canonical.steps:
@@ -131,6 +143,37 @@ def render_schedule(schedule: Schedule, case: Case, *, policy_id: str) -> str:
     for step in canonical.steps:
         lines.extend(_step_lines(step))
     return "\n".join(lines) + "\n"
+
+
+def render_full_schedule(
+    schedule: Schedule,
+    case: Case,
+    *,
+    history_text: str,
+    policy_id: str,
+    history_start_date: date,
+) -> str:
+    """Собрать полный `wells_schedule.inc`: история байт-в-байт + новое окно.
+
+    История не перерисовывается генератором: байты официального источника
+    являются неизменяемым префиксом. MAS позже сможет менять только часть,
+    которая начинается с первого `DATES` окна управления.
+    """
+
+    if not history_text:
+        raise ScheduleRenderError("source history is empty; refusing to publish partial schedule")
+    management_text = render_schedule(schedule, case, policy_id=policy_id)
+    start_line = f"-- source history start: {history_start_date.isoformat()}\n"
+    separator = "" if history_text.endswith("\n") else "\n"
+    return history_text + separator + start_line + management_text
+
+
+def preserved_history_sha256(schedule_text: str, history_text: str) -> str:
+    """SHA-256 сохранённого исторического префикса полного расписания."""
+
+    if not schedule_text.startswith(history_text):
+        raise ScheduleRenderError("full schedule does not preserve source history bytes")
+    return hashlib.sha256(schedule_text[: len(history_text)].encode("utf-8")).hexdigest()
 
 
 def schedule_sha256(text: str) -> str:

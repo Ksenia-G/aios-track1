@@ -22,8 +22,9 @@
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,20 +40,32 @@ from aios.schedule.generator import (
     GENERATOR_ID,
     GENERATOR_VERSION,
     ScheduleRenderError,
-    render_schedule,
+    render_full_schedule,
     schedule_sha256,
 )
 from aios.schedule.policy import DEFAULT_POLICY_ID, Policy, get_policy
 from aios.schedule.state import FieldState, reconstruct_state
 from aios.schedule.validator import ScheduleValidationReport, validate_schedule
+from aios.state import (
+    STATE_CARD_ARTIFACT_ROOT,
+    StateCard,
+    StateCardError,
+    StateExtractor,
+    publish_state_card,
+    state_run_id,
+    well_controls_from_schedule,
+)
 
 PIPELINE_ID = "aios.pipeline.validation"
 PIPELINE_VERSION = "1.0.0"
 
 SCHEDULE_FILENAME = "wells_schedule.inc"
 CLAIMED_NPV_FILENAME = "claimed_npv.json"
+YEARLY_NPV_PROFILE_FILENAME = "yearly_npv_profile.json"
+CONSTRAINT_REPORT_FILENAME = "constraint_report.json"
 VALIDATION_REPORT_FILENAME = "validation_report.json"
-RUN_MANIFEST_FILENAME = "run_manifest.json"
+RUN_PROVENANCE_FILENAME = "run_provenance.json"
+RUN_MANIFEST_FILENAME = RUN_PROVENANCE_FILENAME
 CHDD_INPUT_FILENAME = "chdd_input.csv"
 STAGING_DIRNAME = "staging"
 
@@ -61,8 +74,11 @@ STAGING_DIRNAME = "staging"
 FINAL_ARTIFACTS = (
     SCHEDULE_FILENAME,
     CLAIMED_NPV_FILENAME,
+    YEARLY_NPV_PROFILE_FILENAME,
+    CONSTRAINT_REPORT_FILENAME,
     VALIDATION_REPORT_FILENAME,
-    RUN_MANIFEST_FILENAME,
+    RUN_PROVENANCE_FILENAME,
+    STATE_CARD_ARTIFACT_ROOT,
 )
 
 VERDICT_READY = "READY"
@@ -102,12 +118,14 @@ class PipelineReport:
     schedule_report: ScheduleValidationReport | None = None
     opm_result: OpmRunResult | None = None
     chdd_result: ChddResult | None = None
+    state_card: StateCard | None = None
     trajectory_stats: dict[str, Any] | None = None
     known_wells: int = 0
     reconstructed_wells: int = 0
     schedule_steps: int = 0
     npv_difference: float | None = None
     chdd_input_path: Path | None = None
+    execution_mode: str = "full"
     invalidated_artifacts: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
@@ -147,6 +165,7 @@ class PipelineReport:
             "pipeline": {"id": PIPELINE_ID, "version": PIPELINE_VERSION},
             "case_id": None if self.case is None else self.case.case_id,
             "policy_id": self.policy_id,
+            "execution_mode": self.execution_mode,
             "case_loaded": self.case_loaded,
             "history_loaded": self.history_loaded,
             "constraints_loaded": self.constraints_loaded,
@@ -169,6 +188,13 @@ class PipelineReport:
             "state": {
                 "known_wells": self.known_wells,
                 "reconstructed_wells": self.reconstructed_wells,
+                "card": None
+                if self.state_card is None
+                else {
+                    "date": self.state_card.metadata.date.isoformat(),
+                    "digest": self.state_card.digest(),
+                    "run_id": self.state_card.metadata.run_id,
+                },
             },
             "simulation": None if self.opm_result is None else self.opm_result.to_json(),
             "trajectory": self.trajectory_stats,
@@ -200,6 +226,8 @@ class PipelineOutcome:
 def claimed_npv_payload(report: PipelineReport) -> dict[str, Any]:
     """Содержимое `claimed_npv.json` -- контракт заявки на результат."""
 
+    if report.execution_mode != "full":
+        raise ValueError("FINAL_CLAIM_REQUIRES_FULL_RUN")
     case = report.case
     chdd = report.chdd_result
     assert case is not None and chdd is not None  # проверено вызывающей стороной
@@ -211,6 +239,31 @@ def claimed_npv_payload(report: PipelineReport) -> dict[str, Any]:
         "schedule_sha256": report.schedule_sha256,
         "simulation_status": "PASS" if report.simulation_pass else "FAIL",
         "constraints_status": "PASS" if report.all_hard_constraints_pass else "FAIL",
+    }
+
+
+def yearly_npv_profile_payload(report: PipelineReport) -> dict[str, Any]:
+    case = report.case
+    chdd = report.chdd_result
+    assert case is not None and chdd is not None
+    return {
+        "case_id": case.case_id,
+        "unit": "mln RUB",
+        "total_npv_mln_rub": chdd.npv_mln_rub,
+        "calculator_version": chdd.calculator_version,
+        "provenance": chdd.provenance,
+        "yearly_profile": [row.to_json() for row in chdd.yearly_profile],
+    }
+
+
+def constraint_report_payload(report: PipelineReport) -> dict[str, Any]:
+    return {
+        "status": "PASS" if report.all_hard_constraints_pass else "FAIL",
+        "realized_constraints_status": "PASS" if report.all_hard_constraints_pass else "FAIL",
+        "schedule_gates": None
+        if report.schedule_report is None
+        else report.schedule_report.to_json(),
+        "blockers": list(report.blockers),
     }
 
 
@@ -239,6 +292,7 @@ def _run_manifest(
         "pipeline": {"id": PIPELINE_ID, "version": PIPELINE_VERSION},
         "generator": {"id": GENERATOR_ID, "version": GENERATOR_VERSION},
         "policy_id": report.policy_id,
+        "execution_mode": report.execution_mode,
         "started_at": started_at,
         "finished_at": finished_at,
         "case": None if case is None else case.to_json(),
@@ -247,6 +301,13 @@ def _run_manifest(
         "chdd_input": None if report.chdd_input_path is None else str(report.chdd_input_path),
         "schedule_sha256": report.schedule_sha256,
         "simulation": None if report.opm_result is None else report.opm_result.to_json(),
+        "state_card": None
+        if report.state_card is None
+        else {
+            "date": report.state_card.metadata.date.isoformat(),
+            "digest": report.state_card.digest(),
+            "run_id": report.state_card.metadata.run_id,
+        },
         "calculator_version": None
         if report.chdd_result is None
         else report.chdd_result.calculator_version,
@@ -265,14 +326,14 @@ def _write_json(path: Path, payload: Any) -> Path:
     return path
 
 
-def read_baseline_inputs(case: Case) -> tuple[FieldState, Schedule, str]:
+def read_baseline_inputs(case: Case) -> tuple[FieldState, Schedule, str, date]:
     """Состояние на начало окна, опорное расписание окна и текст истории."""
 
     start_date = parse_start_date(case.history.data_path.read_text(encoding="utf-8"))
     deck = parse_schedule_file(case.history.schedule_path, start_date=start_date)
     state = reconstruct_state(deck, case.management_start_date)
     baseline = deck.control_schedule(case.management_start_date, case.management_end_date)
-    return state, baseline, deck.history_text(case.management_start_date)
+    return state, baseline, deck.history_text(case.management_start_date), start_date
 
 
 def build_schedule_for_case(
@@ -288,9 +349,15 @@ def build_schedule_for_case(
     if (policy is None) == (policy_id is None):
         raise ValueError("pass exactly one of policy_id or policy")
     resolved = policy if policy is not None else get_policy(str(policy_id))
-    state, baseline, history_text = read_baseline_inputs(case)
+    state, baseline, history_text, history_start_date = read_baseline_inputs(case)
     schedule = resolved.plan(state, baseline)
-    schedule_text = render_schedule(schedule, case, policy_id=resolved.policy_id)
+    schedule_text = render_full_schedule(
+        schedule,
+        case,
+        history_text=history_text,
+        policy_id=resolved.policy_id,
+        history_start_date=history_start_date,
+    )
     return schedule, state, schedule_text, history_text
 
 
@@ -306,6 +373,9 @@ def invalidate_package(output_dir: Path) -> tuple[str, ...]:
         path = output_dir / name
         if path.is_file():
             path.unlink()
+            removed.append(name)
+        elif path.is_dir():
+            shutil.rmtree(path)
             removed.append(name)
     return tuple(removed)
 
@@ -335,7 +405,7 @@ def _execute(
     report.constraints_loaded = True
 
     try:
-        schedule, state, schedule_text, history_text = build_schedule_for_case(
+        schedule, state, schedule_text, _history_text = build_schedule_for_case(
             case, policy_id=policy_id
         )
     except (DeckParseError, ScheduleRenderError, ValueError, OSError) as exc:
@@ -366,7 +436,7 @@ def _execute(
         workspace = prepare_workspace(
             case,
             root=workspace_root,
-            history_text=history_text,
+            history_text="",
             schedule_text=schedule_text,
         )
         opm_result, summary = run_simulation(case, workspace)
@@ -380,6 +450,33 @@ def _execute(
     if not opm_result.is_pass or summary is None:
         report.blockers.extend(opm_result.errors[:10] or ["simulation produced no summary"])
         return
+
+    try:
+        schedule_hash = report.schedule_sha256
+        if schedule_hash is None:
+            raise StateCardError("schedule hash is unavailable")
+        simulator_digest = case.simulator.docker_image
+        state_card = StateExtractor().extract(
+            summary=summary,
+            case=case,
+            run_id=state_run_id(
+                case_id=case.case_id,
+                schedule_hash=schedule_hash,
+                simulator_digest=simulator_digest,
+            ),
+            simulator_digest=simulator_digest,
+            schedule_hash=schedule_hash,
+            well_controls=well_controls_from_schedule(
+                state,
+                schedule,
+                at_date=summary.dates[-1].date(),
+            ),
+        )
+    except StateCardError as exc:
+        report.blockers.append(f"state: {exc}")
+        return
+
+    report.state_card = state_card
 
     chdd_input: ChddInput | None = None
     try:
@@ -477,17 +574,37 @@ def _publish(
     written: list[Path] = []
 
     if report.verdict == VERDICT_READY and report.case is not None and report.chdd_result:
+        if report.state_card is None or report.opm_result is None:
+            raise PipelinePublishError("state card is missing from successful run")
         staged_schedule = staging_dir / SCHEDULE_FILENAME
         if not staged_schedule.is_file():
             raise PipelinePublishError(f"staged schedule is missing: {staged_schedule}")
         published = output_dir / SCHEDULE_FILENAME
         published.write_text(staged_schedule.read_text(encoding="utf-8"), encoding="utf-8")
         written.append(published)
+        written.append(
+            _write_json(output_dir / CONSTRAINT_REPORT_FILENAME, constraint_report_payload(report))
+        )
+        written.append(
+            _write_json(
+                output_dir / YEARLY_NPV_PROFILE_FILENAME, yearly_npv_profile_payload(report)
+            )
+        )
+        written.append(
+            publish_state_card(
+                report.state_card,
+                output_dir=output_dir,
+                source_artifacts=report.opm_result.output_files,
+            )
+        )
         written.append(_write_json(output_dir / VALIDATION_REPORT_FILENAME, report.to_json()))
-        written.append(_write_json(output_dir / RUN_MANIFEST_FILENAME, manifest))
+        written.append(_write_json(output_dir / RUN_PROVENANCE_FILENAME, manifest))
         written.append(_write_json(output_dir / CLAIMED_NPV_FILENAME, claimed_npv_payload(report)))
     else:
+        written.append(
+            _write_json(output_dir / CONSTRAINT_REPORT_FILENAME, constraint_report_payload(report))
+        )
         written.append(_write_json(output_dir / VALIDATION_REPORT_FILENAME, report.to_json()))
-        written.append(_write_json(output_dir / RUN_MANIFEST_FILENAME, manifest))
+        written.append(_write_json(output_dir / RUN_PROVENANCE_FILENAME, manifest))
 
     return PipelineOutcome(report=report, output_dir=output_dir, written_files=tuple(written))
