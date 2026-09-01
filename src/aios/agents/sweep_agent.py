@@ -62,7 +62,14 @@ class SweepProposal:
 
     metadata: dict[str, str]
     proposal_type: ProposalType
-    target: tuple[str, ...]
+    well_ids: tuple[str, ...]
+    """Скважины, О КОТОРЫХ этот факт. См. `PressureProposal.well_ids`.
+
+    Тот же ambiguous `target` стоял и здесь. До реальной колоды он не дошёл
+    только потому, что pressure_diagnostic проверяется раньше по порядку
+    слотов в EvidenceBuilder -- то есть это был латентный отказ, а не
+    отсутствующий.
+    """
     reason: SweepProposalReason
     confidence: float
     risk_flags: tuple[str, ...]
@@ -76,8 +83,8 @@ class SweepProposal:
         for key, value in self.metadata.items():
             required_text(key, "sweep_proposal.metadata")
             required_text(value, f"sweep_proposal.metadata.{key}")
-        for index, well in enumerate(self.target):
-            required_text(well, f"sweep_proposal.target[{index}]")
+        for index, well in enumerate(self.well_ids):
+            required_text(well, f"sweep_proposal.well_ids[{index}]")
         for index, flag in enumerate(self.risk_flags):
             required_text(flag, f"sweep_proposal.risk_flags[{index}]")
 
@@ -85,7 +92,7 @@ class SweepProposal:
         return {
             "metadata": dict(self.metadata),
             "proposal_type": str(self.proposal_type),
-            "target": list(self.target),
+            "well_ids": list(self.well_ids),
             "reason": self.reason.to_json(),
             "confidence": self.confidence,
             "risk_flags": list(self.risk_flags),
@@ -149,7 +156,7 @@ class SweepAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.WATER_SWEEP_WARNING,
-                target=tuple(well.well_id for well in near_wlpr),
+                well_ids=tuple(well.well_id for well in near_wlpr),
                 reason=SweepProposalReason(
                     water_condition=NEAR_WLPR_LIMIT_WITH_HIGH_WATER_CUT,
                     oil_efficiency_condition=_efficiency_condition(near_wlpr),
@@ -162,7 +169,7 @@ class SweepAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.REDUCE_WATER_RISK,
-                target=tuple(well.well_id for well in low_efficiency),
+                well_ids=tuple(well.well_id for well in low_efficiency),
                 reason=SweepProposalReason(
                     water_condition=HIGH_WATER_CUT,
                     oil_efficiency_condition=LOW_OIL_EFFICIENCY,
@@ -174,7 +181,7 @@ class SweepAgent:
         return self._proposal(
             state_card,
             proposal_type=ProposalType.HOLD,
-            target=(),
+            well_ids=(),
             reason=SweepProposalReason(
                 water_condition=WATER_CUT_STABLE,
                 oil_efficiency_condition=OIL_EFFICIENCY_ACCEPTABLE,
@@ -189,7 +196,7 @@ class SweepAgent:
         state_card: StateCard,
         *,
         proposal_type: ProposalType,
-        target: tuple[str, ...],
+        well_ids: tuple[str, ...],
         reason: SweepProposalReason,
         confidence: float,
         risk_flags: tuple[str, ...],
@@ -200,7 +207,7 @@ class SweepAgent:
                 "agent_version": self.agent_version,
             },
             proposal_type=proposal_type,
-            target=target,
+            well_ids=well_ids,
             reason=reason,
             confidence=confidence,
             risk_flags=risk_flags,

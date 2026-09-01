@@ -137,7 +137,7 @@ def test_healthy_low_water_producer_returns_hold() -> None:
     assert proposal.metadata["state_card_digest"] == _card().digest()
     assert proposal.metadata["agent_version"] == SWEEP_AGENT_VERSION
     assert proposal.proposal_type == ProposalType.HOLD
-    assert proposal.target == ()
+    assert proposal.well_ids == ()
     assert proposal.reason.water_condition == "WATER_CUT_STABLE"
     assert proposal.reason.oil_efficiency_condition == "OIL_EFFICIENCY_ACCEPTABLE"
     assert proposal.confidence == pytest.approx(0.7)
@@ -150,7 +150,7 @@ def test_high_water_cut_producer_returns_reduce_water_risk() -> None:
     )
 
     assert proposal.proposal_type == ProposalType.REDUCE_WATER_RISK
-    assert proposal.target == ("P1",)
+    assert proposal.well_ids == ("P1",)
     assert proposal.reason.water_condition == "HIGH_WATER_CUT"
     assert proposal.reason.oil_efficiency_condition == "LOW_OIL_EFFICIENCY"
     assert (
@@ -165,7 +165,7 @@ def test_high_liquid_near_limit_and_high_water_cut_returns_sweep_warning() -> No
     )
 
     assert proposal.proposal_type == ProposalType.WATER_SWEEP_WARNING
-    assert proposal.target == ("P1",)
+    assert proposal.well_ids == ("P1",)
     assert proposal.reason.water_condition == "NEAR_WLPR_LIMIT_WITH_HIGH_WATER_CUT"
     assert "NEAR_WLPR_LIMIT" in proposal.risk_flags
     assert all("VIOLATION" not in flag for flag in proposal.risk_flags)

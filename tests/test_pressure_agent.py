@@ -130,7 +130,7 @@ def test_healthy_field_returns_hold() -> None:
     assert proposal.metadata["state_card_digest"] == _card().digest()
     assert proposal.metadata["agent_version"] == PRESSURE_AGENT_VERSION
     assert proposal.proposal_type == ProposalType.HOLD
-    assert proposal.target == ()
+    assert proposal.well_ids == ()
     assert proposal.reason.pressure_condition == "PRESSURE_SUPPORT_STABLE"
     assert proposal.confidence == pytest.approx(0.7)
     assert proposal.risk_flags == ()
@@ -140,7 +140,7 @@ def test_producer_near_bhp_limit_returns_pressure_support_proposal() -> None:
     proposal = PressureAgent().propose(_card(wells=(_producer(bhp=51.0), _injector())))
 
     assert proposal.proposal_type == ProposalType.INJECTION_INCREASE
-    assert proposal.target == ("I1",)
+    assert proposal.well_ids == ("I1",)
     assert proposal.reason.pressure_condition == "PRESSURE_SUPPORT_NEEDED"
     assert proposal.reason.expected_effect == "Increase pressure support around weak producers."
     assert "PRESSURE_SUPPORT_NEEDED" in proposal.risk_flags
@@ -150,7 +150,7 @@ def test_injector_near_cap_returns_capacity_warning_without_increase() -> None:
     proposal = PressureAgent().propose(_card(wells=(_producer(), _injector(bhp=299.8))))
 
     assert proposal.proposal_type == ProposalType.HOLD
-    assert proposal.target == ("I1",)
+    assert proposal.well_ids == ("I1",)
     assert proposal.reason.pressure_condition == "INJECTOR_CAPACITY_LIMITED"
     assert "INJECTOR_CAPACITY_LIMITED" in proposal.risk_flags
 

@@ -57,7 +57,16 @@ class PressureProposal:
 
     metadata: dict[str, str]
     proposal_type: ProposalType
-    target: tuple[str, ...]
+    well_ids: tuple[str, ...]
+    """Скважины, О КОТОРЫХ этот факт, -- идентификаторы, а не величины.
+
+    Поле называется `well_ids`, а не `target`, потому что имя обязано нести
+    семантику само: `target` -- предписывающее имя, и общая граница
+    NO-SETPOINTS-CROSS обязана считать величину под ним setpoint'ом. У колоды
+    Model Y скважины названы голыми числами ("2", "13", "21"), и лексически
+    `{"target": ["13"]}` неотличимо от `{"target": ["240"]}`. Различить их
+    может только тип поля -- то есть вот это имя, а не догадка сканера.
+    """
     reason: PressureProposalReason
     confidence: float
     risk_flags: tuple[str, ...]
@@ -71,8 +80,8 @@ class PressureProposal:
         for key, value in self.metadata.items():
             required_text(key, "pressure_proposal.metadata")
             required_text(value, f"pressure_proposal.metadata.{key}")
-        for index, well in enumerate(self.target):
-            required_text(well, f"pressure_proposal.target[{index}]")
+        for index, well in enumerate(self.well_ids):
+            required_text(well, f"pressure_proposal.well_ids[{index}]")
         for index, flag in enumerate(self.risk_flags):
             required_text(flag, f"pressure_proposal.risk_flags[{index}]")
 
@@ -80,7 +89,7 @@ class PressureProposal:
         return {
             "metadata": dict(self.metadata),
             "proposal_type": str(self.proposal_type),
-            "target": list(self.target),
+            "well_ids": list(self.well_ids),
             "reason": self.reason.to_json(),
             "confidence": self.confidence,
             "risk_flags": list(self.risk_flags),
@@ -153,7 +162,7 @@ class PressureAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.INJECTION_INCREASE,
-                target=tuple(well.well_id for well in available_injectors),
+                well_ids=tuple(well.well_id for well in available_injectors),
                 reason=PressureProposalReason(
                     pressure_condition=PRESSURE_SUPPORT_NEEDED,
                     affected_region=_producer_region(weak_producers),
@@ -166,7 +175,7 @@ class PressureAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.INJECTION_REALLOCATION,
-                target=tuple(well.well_id for well in capped_injectors),
+                well_ids=tuple(well.well_id for well in capped_injectors),
                 reason=PressureProposalReason(
                     pressure_condition=INJECTOR_CAPACITY_LIMITED,
                     affected_region=_producer_region(weak_producers),
@@ -179,7 +188,7 @@ class PressureAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.HOLD,
-                target=(),
+                well_ids=(),
                 reason=PressureProposalReason(
                     pressure_condition=PRESSURE_SUPPORT_NEEDED,
                     affected_region=_producer_region(weak_producers),
@@ -192,7 +201,7 @@ class PressureAgent:
             return self._proposal(
                 state_card,
                 proposal_type=ProposalType.HOLD,
-                target=tuple(well.well_id for well in capped_injectors),
+                well_ids=tuple(well.well_id for well in capped_injectors),
                 reason=PressureProposalReason(
                     pressure_condition=INJECTOR_CAPACITY_LIMITED,
                     affected_region=_injector_region(capped_injectors),
@@ -204,7 +213,7 @@ class PressureAgent:
         return self._proposal(
             state_card,
             proposal_type=ProposalType.HOLD,
-            target=(),
+            well_ids=(),
             reason=PressureProposalReason(
                 pressure_condition=PRESSURE_SUPPORT_STABLE,
                 affected_region="field",
@@ -219,7 +228,7 @@ class PressureAgent:
         state_card: StateCard,
         *,
         proposal_type: ProposalType,
-        target: tuple[str, ...],
+        well_ids: tuple[str, ...],
         reason: PressureProposalReason,
         confidence: float,
         risk_flags: tuple[str, ...],
@@ -230,7 +239,7 @@ class PressureAgent:
                 "agent_version": self.agent_version,
             },
             proposal_type=proposal_type,
-            target=target,
+            well_ids=well_ids,
             reason=reason,
             confidence=confidence,
             risk_flags=risk_flags,
