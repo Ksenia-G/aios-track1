@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Получить исходный код
         uses: actions/checkout@v6
+        with:
+          # Тесты авторитетных контрактов сверяются с историческими SHA через
+          # `git show <sha>:<file>`; на shallow-клоне таких коммитов нет.
+          fetch-depth: 0
 
       - name: Подготовить окружение
         uses: jdx/mise-action@v2
