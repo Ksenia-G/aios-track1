@@ -2,9 +2,8 @@
 
 Кто что может делать -- в терминах уже замороженных контрактов
 (`docs/architecture/mas-v1.1-contracts.md`) и системных инвариантов T1--T7
-(`src/aios/mas/invariants.py`). Ничего из перечисленного ниже как "будущий
-компонент" не реализовано в этом репозитории -- это frozen authority map для
-того, что предстоит построить.
+(`src/aios/mas/invariants.py`). Перечисленные ниже компоненты реализованы;
+таблица описывает действующие полномочия, а не план.
 
 | Component | Owner | Can read StateCard/evidence | Can propose structure (Intent/Proposal) | Can produce numerical setpoints | Can run the simulator | Can reject a realized-constraint candidate | Can compute final CHDD | Can commit final decision |
 |---|---|---|---|---|---|---|---|---|
