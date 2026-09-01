@@ -69,22 +69,27 @@ ProductionProposal    InjectionProposal
 - **Test-only foundation** (`tests/support/`) -- deterministic factories и
   stubs, чтобы начать писать тесты до готовности настоящих компонентов.
 
-## 4. Что ЕЩЁ НЕ реализовано
+## 4. Статус компонентов
 
-Явно, чтобы не было иллюзий при первом чтении кода:
+Специалисты (Production, Injection), Arbiter, MagnitudeResolver,
+PredictiveSafetyScreen, Closed-loop Orchestrator, runtime execution adapter
+(ScheduleCompiler/SimulatorRuntime поверх MagnitudeCandidate), LLM-провайдер с
+PromptBuilder/GroundingAuditor/ProposalCompiler и CompensationPolicy port
+**реализованы** и участвовали в замороженном измерении
+`PERF-004-CAUSAL-CLEAN-001` (код `205ad86`): MAS OFF 5325.05 -> MAS ON 5342.72
+млн ₽, прирост +17.68 млн ₽ (+0.332 %). Свидетельства:
+[`submission_evidence/`](../../submission_evidence/README.md).
 
-- Production/Injection Controller (specialist agents) -- **не реализованы**.
-- Arbiter -- **не реализован** (central integration owner).
-- MagnitudeResolver -- **не реализован** (central integration owner,
-  numerical intensity mapping тоже).
-- PredictiveSafetyScreen -- **не реализован** (резерв за Лизой В.).
-- Closed-loop Orchestrator -- **не реализован** (резерв за Лизой Д.).
-- Runtime execution adapter (ScheduleCompiler/SimulatorRuntime integration
-  поверх MagnitudeCandidate) -- **не реализован** (резерв за Марком).
-- LLM provider/PromptBuilder/GroundingAuditor/ProposalCompiler -- **не
-  реализованы** ни для одной роли.
-- CompensationPolicy port, economic pre-screen -- central integration,
-  **не реализованы**.
+Доказано ровно то, что измерено: один замкнутый прогон бенчмарка на три эпохи
+решения. Это не заявление о промышленной зрелости.
+
+Что действительно остаётся открытым:
+
+- **экономический pre-screen** до симуляции не реализован: кандидаты
+  отсеиваются Guardian'ом и экономикой уже после полного прогона OPM.
+- **официальная формула компенсации** организатором не подтверждена -- порт
+  работает под флагом `OFFICIAL_UNKNOWN_PORT`.
+- **сверка с tNavigator** не выполнена -- `NOT_OFFICIAL_PENDING_TNAV_REFERENCE`.
 
 ## 5. Ссылки на role-документы
 
