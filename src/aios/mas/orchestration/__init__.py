@@ -5,6 +5,11 @@
 обязаны быть переданы явно -- значений по умолчанию у них нет.
 """
 
+from aios.mas.orchestration.audit import (
+    DecisionEpochAudit,
+    EvidenceAudit,
+    SpecialistAudit,
+)
 from aios.mas.orchestration.boundaries import (
     CHDD,
     ArbiterLike,
@@ -59,9 +64,11 @@ __all__ = [
     "ClosedLoopOrchestrator",
     "CompositionError",
     "ConflictPredicate",
+    "DecisionEpochAudit",
     "DecisionStepInput",
     "DecisionStepResult",
     "DecisionTrace",
+    "EvidenceAudit",
     "GuardianVerdict",
     "IdentityPredictiveSafetyScreen",
     "OpmChdd",
@@ -76,6 +83,7 @@ __all__ = [
     "RealizedStateAdvancer",
     "RealizedStateExtractor",
     "SimulatorRuntimeExecutor",
+    "SpecialistAudit",
     "SpecialistFactory",
     "StateAdvancer",
     "StepFailure",

@@ -18,7 +18,9 @@ from enum import StrEnum
 
 from aios.evaluation.canonical import JsonValue, digest
 
-BENCHMARK_SCHEMA_VERSION = "aios.benchmark/1.0.0"
+# 1.1.0 -- аддитивное расширение: сводка несёт по одной аудиторской записи
+# на эпоху (`extra.epoch_audits`). Экономические поля не менялись.
+BENCHMARK_SCHEMA_VERSION = "aios.benchmark/1.1.0"
 
 
 class BenchmarkError(ValueError):

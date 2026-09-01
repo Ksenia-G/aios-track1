@@ -28,7 +28,7 @@ from aios.benchmark.contracts import (
     VariantFamily,
 )
 from aios.benchmark.epochs import decision_epochs
-from aios.evaluation.canonical import digest
+from aios.evaluation.canonical import JsonValue, digest
 from aios.execution.history import (
     CommittedHistory,
     CommittedInterval,
@@ -223,6 +223,32 @@ def fallback_count(results) -> int:
         int(result.production_fallback_used) + int(result.injection_fallback_used)
         for result in results
     )
+
+
+def epoch_audits(epochs, results) -> list[JsonValue]:
+    """Одна строка на эпоху: дата решения рядом с датой прочитанного состояния.
+
+    Оркестратор знает состояние, бенчмарк знает сетку эпох; сводит их только
+    здесь. Обе даты лежат в одной строке намеренно -- причинный гейт «состояние
+    не позже своей эпохи» обязан читаться из артефакта глазами, а не
+    восстанавливаться из поведения прогона, как это было в PERF-004.
+
+    Ничего не вычисляется заново: `DecisionEpochAudit` собран на самом шаге.
+    """
+    records: list[JsonValue] = []
+    for index, (epoch, result) in enumerate(zip(epochs, results, strict=False)):
+        audit = getattr(result, "audit", None)
+        payload: dict[str, JsonValue] = {
+            "epoch_index": index,
+            "decision_date": epoch.isoformat(),
+        }
+        if audit is None:
+            payload["state_card_date"] = None
+            records.append(payload)
+            continue
+        payload.update(audit.to_json())
+        records.append(payload)
+    return records
 
 
 def _committed_action_controls(runtime, candidate):
@@ -466,6 +492,8 @@ def run_mas_variant(
             # Воронка поиска по эпохам: виртуальных вариантов может быть много,
             # физических -- никогда больше бюджета.
             "search_funnel": list(resolver.funnel),
+            # Причинный аудит: по одной записи на эпоху, наблюдательно.
+            "epoch_audits": epoch_audits(epochs, results),
         },
     )
 

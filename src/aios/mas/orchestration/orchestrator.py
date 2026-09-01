@@ -63,6 +63,7 @@ from aios.mas.invariants import (
     require_simulation_floor,
 )
 from aios.mas.magnitude import MagnitudeCandidate
+from aios.mas.orchestration.audit import DecisionEpochAudit, EvidenceAudit, SpecialistAudit
 from aios.mas.orchestration.boundaries import (
     CHDD,
     ArbiterLike,
@@ -412,6 +413,10 @@ class DecisionStepResult:
     # count фолбэков ниже по стеку не из чего было честно посчитать.
     production_fallback_used: bool
     injection_fallback_used: bool
+    #: Наблюдательный след шага. Значение по умолчанию -- None, поэтому
+    #: вызывающий, которому телеметрия не нужна, ведёт себя как раньше.
+    #: Ни одно решение от этого поля не зависит: оно только записывается.
+    audit: DecisionEpochAudit | None = None
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
@@ -426,6 +431,7 @@ class DecisionStepResult:
             "next_state_digest": self.next_state.digest(),
             "production_fallback_used": self.production_fallback_used,
             "injection_fallback_used": self.injection_fallback_used,
+            "audit": None if self.audit is None else self.audit.to_json(),
         }
 
 
@@ -593,6 +599,18 @@ class ClosedLoopOrchestrator:
             # фолбэком здесь не считается.
             production_fallback_used=production_output.primary_proposal.provenance.fallback_used,
             injection_fallback_used=injection_output.primary_proposal.provenance.fallback_used,
+            # Снимок ТОГО ЖЕ вывода, что ушёл к Arbiter. Строится после всех
+            # решений шага и ни на одно из них не влияет.
+            audit=DecisionEpochAudit(
+                state_card_date=step_input.state.metadata.date,
+                state_card_digest=step_input.state.digest(),
+                pressure=EvidenceAudit.of(step_input.pressure_diagnostic),
+                sweep=EvidenceAudit.of(step_input.sweep_diagnostic),
+                support_connectivity=EvidenceAudit.of(step_input.geology_card),
+                regional_support_imbalance=EvidenceAudit.of(step_input.response_map),
+                production=SpecialistAudit.of(production_output),
+                injection=SpecialistAudit.of(injection_output),
+            ),
         )
         if self._decision_trace is not None:
             self._decision_trace.append(result)
@@ -815,6 +833,7 @@ class ClosedLoopOrchestrator:
         step_input: DecisionStepInput,
         production_fallback_used: bool,
         injection_fallback_used: bool,
+        audit: DecisionEpochAudit | None = None,
     ) -> DecisionStepResult:
         # Каждый кандидат исполняется ровно один раз, и его прогон
         # принимается только вместе с провенансом, который называет именно
@@ -922,6 +941,7 @@ class ClosedLoopOrchestrator:
             next_state=next_state,
             production_fallback_used=production_fallback_used,
             injection_fallback_used=injection_fallback_used,
+            audit=audit,
         )
 
 

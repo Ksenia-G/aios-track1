@@ -91,7 +91,16 @@ class InjectionController:
         if self._llm_enabled:
             primary, alternatives = self._compile_llm_beam_or_floor(validated, evidence)
         else:
-            primary, alternatives = self._compile_deterministic_fallback(validated, evidence), ()
+            # Отключённая когнитивная ветка -- это тоже фолбэк, и провенанс
+            # обязан называть его своим именем: источник DETERMINISTIC_FALLBACK
+            # с fallback_used=False заставлял абляцию MAS OFF занижать саму
+            # себя (3 из 6 решений на трёх эпохах).
+            primary, alternatives = (
+                self._compile_deterministic_fallback(
+                    validated, evidence, fallback_reason="llm_disabled"
+                ),
+                (),
+            )
         return InjectionAgentOutput(
             primary_proposal=primary,
             baseline_proposal=baseline,
