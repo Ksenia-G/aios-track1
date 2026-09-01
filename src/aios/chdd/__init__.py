@@ -1,6 +1,9 @@
 """Адаптер официального калькулятора ЧДД."""
 
 from aios.chdd.runner import (
+    ANNUAL_CUMULATIVE_KEYS,
+    ANNUAL_NPV_KEYS,
+    AnnualChddRow,
     ChddError,
     ChddResult,
     ChddResultSchemaError,
@@ -17,7 +20,10 @@ from aios.chdd.trajectory import (
 )
 
 __all__ = [
+    "ANNUAL_CUMULATIVE_KEYS",
+    "ANNUAL_NPV_KEYS",
     "CHDD_COLUMNS",
+    "AnnualChddRow",
     "ChddError",
     "ChddInput",
     "ChddResult",

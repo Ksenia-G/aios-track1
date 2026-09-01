@@ -8,7 +8,7 @@
 пайплайна, а не предупреждение в отчёте.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import pairwise
@@ -16,8 +16,44 @@ from math import isfinite
 from typing import Any
 
 from aios.cases.contract import Case
-from aios.schedule.events import Schedule, WellRole
+from aios.schedule.events import (
+    InjectorControl,
+    ProducerControl,
+    Schedule,
+    WellRole,
+    WellStatus,
+)
 from aios.schedule.state import FieldState
+
+
+class ControlRepresentationError(ValueError):
+    """Управление нельзя записать легальной строкой WCONPROD/WCONINJE."""
+
+
+def require_representable_controls(
+    producers: Sequence[ProducerControl],
+    injectors: Sequence[InjectorControl],
+) -> None:
+    """Отвергнуть управления, которые симулятор не сможет разобрать.
+
+    Открытая скважина обязана иметь величину своего режима: OPM отказывается
+    разбирать `CMODE` без значения, и до этой проверки такой кандидат тратил
+    полный прогон симулятора, чтобы упасть при разборе колоды. Закрытая
+    скважина под правило не подпадает -- у неё величины нет по существу,
+    и поле режима остаётся дефолтным.
+    """
+    for producer in producers:
+        if producer.status is WellStatus.OPEN and producer.liquid_rate is None:
+            raise ControlRepresentationError(
+                f"producer {producer.well!r}: status OPEN requires a value for control "
+                f"mode {producer.mode!r}; a rate mode without a value is not parsable"
+            )
+    for injector in injectors:
+        if injector.status is WellStatus.OPEN and injector.surface_rate is None:
+            raise ControlRepresentationError(
+                f"injector {injector.well!r}: status OPEN requires a value for control "
+                f"mode {injector.mode!r}; a rate mode without a value is not parsable"
+            )
 
 
 class GateStatus(StrEnum):

@@ -1,0 +1,66 @@
+{
+  "run_id": "PERF-004-CAUSAL-CLEAN-001",
+  "classification": "PERF_004_CAUSAL_CLEAN_GAIN",
+  "measurement_code_sha": "205ad86cd97e69ff2e24a0c7dd097f29183a7444",
+  "post_measurement_telemetry_code_sha": "83cdd43bce8a0b885bfcf8365359b3870de3ba27",
+  "provenance_note": "Every value here is read from, or recomputed from, the frozen artifact produced at 205ad86cd97e69ff2e24a0c7dd097f29183a7444. No simulation, provider call or economic recomputation was performed to build this package. Telemetry added at 83cdd43bce8a0b885bfcf8365359b3870de3ba27 did NOT exist during the run.",
+  "benchmark_schema_version_of_frozen_artifact": "aios.benchmark/1.0.0",
+  "official_compatible_formula": {
+    "expression": "fixed_history + scale * END_STAMP_FORECAST_OBJECTIVE_2014",
+    "fixed_history_mln_rub": 4771.096458908001,
+    "scale": 0.5131581182307065,
+    "published_official_baseline_mln_rub": 5326.453465501771
+  },
+  "variants": {
+    "mas_off": {
+      "variant_id": "B3_MAS_OFF",
+      "llm_enabled": false,
+      "end_stamp_forecast_objective_2014": 1079.492035705738,
+      "organizer_compatible_total_npv_mln_rub": 5325.0465605957925
+    },
+    "mas_on": {
+      "variant_id": "B4_MAS_ON",
+      "llm_enabled": true,
+      "provider_id": "openai_compatible",
+      "model_id": "gpt-5.6-sol",
+      "end_stamp_forecast_objective_2014": 1113.9374027519964,
+      "organizer_compatible_total_npv_mln_rub": 5342.722480331016
+    }
+  },
+  "delta": {
+    "objective_at_2014_mln_rub": 34.4453670462583,
+    "organizer_compatible_mln_rub": 17.675919735223943,
+    "percent_vs_mas_off": 0.33193925225033666,
+    "percent_vs_published_baseline": 0.30543803554497523
+  },
+  "comparison_class": "DIRECT_COMPARABLE",
+  "win_claimable": true,
+  "frame": {
+    "case_id": "model_y_validation",
+    "deck_reference": "model_y_compat_case",
+    "effective_start": "2014-01-01",
+    "effective_end": "2015-12-01",
+    "simulator_identity": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
+    "guardian_version": "aios.agents.constraint_guardian/1.0.0",
+    "chdd_calculator_version": "NOT_OFFICIAL_PENDING_TNAV_REFERENCE",
+    "compensation_policy": "OFFICIAL_UNKNOWN_PORT",
+    "runtime_mode": "FULL",
+    "shared_initial_state_digest": "bc0e48fc59a6ec67800e139901c44c950fc06ea535dca0c80b650708dba24222"
+  },
+  "provider_provenance_mas_on": {
+    "fallback_count": 0,
+    "round2_count": 0,
+    "policy_failure_count": 0,
+    "specialist_decisions_total": 6,
+    "derivation": "fallback_count aggregates Production and Injection independently per epoch (max 6 for 3 epochs), so 0 means no specialist decision fell back: all six were produced by the live model. The per-specialist 3/3 split is DERIVED from this aggregate.",
+    "per_specialist_breakdown_persisted": false,
+    "beam_contents_persisted": false
+  },
+  "not_persisted_at_measurement_sha": [
+    "per-epoch StateCard dates",
+    "per-epoch diagnostic evidence identities (pressure, sweep, support connectivity, regional support imbalance)",
+    "per-specialist beams, hypotheses and per-call provenance",
+    "committed action labels (e.g. the REALLOCATE_INJECTION enum name)",
+    "per-call provider retry counts"
+  ]
+}

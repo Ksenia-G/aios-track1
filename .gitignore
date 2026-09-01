@@ -35,3 +35,19 @@ runtime/
 
 # Experiment run output
 experiments/*/runtime/
+
+# Simulator artifacts. Physical output is reproducible from the manifest and
+# is far too heavy to belong in history; only compact summaries are tracked.
+*.UNSMRY
+*.SMSPEC
+*.EGRID
+*.UNRST
+*.INIT
+*.DBG
+*.PRT
+*.ESMRY
+
+# Benchmark run output. Workspaces live outside the repository by default;
+# this keeps an accidental in-tree run from being committed.
+benchmark-results/
+benchmark_workspace/

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from aios.cases.contract import Case
+from aios.evaluation.canonical import digest as canonical_digest
 from aios.opm.summary import SummaryData
 
 CHDD_COLUMNS = (
@@ -95,6 +96,20 @@ class ChddInput:
     rows: tuple[tuple[str, ...], ...]
     stats: TrajectoryStats
 
+    def digest(self) -> str:
+        """Идентичность самого входа: заголовки, строки, свойства.
+
+        Экономика считается по этой траектории и ни по какой другой, поэтому
+        результат обязан уметь назвать вход, из которого он получен.
+        """
+        return canonical_digest(
+            {
+                "headers": list(self.headers),
+                "rows": [list(row) for row in self.rows],
+                "stats": self.stats.to_json(),
+            }
+        )
+
 
 def build_chdd_input(summary: SummaryData, case: Case) -> ChddInput:
     """Собрать 14-колоночный вход из сводки OPM."""
@@ -143,12 +158,13 @@ def build_chdd_input(summary: SummaryData, case: Case) -> ChddInput:
             if liquid_rate > wlpr_limit:
                 over_limit += 1
 
-            # Метка строки -- начало интервала, а значения состояния -- на его
-            # конце. Это та же раскладка, что даёт легаси-выгрузка, поэтому
-            # сравнение с ней изолирует ровно дефект приростов.
+            # Метка строки -- КОНЕЦ интервала: и приросты, и значения состояния
+            # относятся к отчётному шагу, на котором они сообщены. Метка на
+            # начале сдвигала добычу на шаг назад, а дисконтирование годовое --
+            # интервал через границу года попадал не в свой год.
             rows.append(
                 (
-                    summary.dates[start].date().isoformat(),
+                    summary.dates[end].date().isoformat(),
                     well,
                     _number(liquid_mass_end),
                     _number(liquid_rate),
