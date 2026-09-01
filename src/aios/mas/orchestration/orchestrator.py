@@ -76,6 +76,7 @@ from aios.mas.orchestration.boundaries import (
     identity_pre_action_validator,
     never_conflict,
 )
+from aios.mas.orchestration.context import build_decision_context
 from aios.mas.orchestration.trace import DecisionTrace, StepFailure
 from aios.mas.proposals import InjectionAgentOutput, ProductionAgentOutput
 from aios.mas.protocols import Agent, MagnitudeResolver
@@ -932,21 +933,36 @@ def default_next_input(
     Закоммиченный кандидат предыдущего шага протягивается в
     `previous_committed`, чтобы проверка T6 (HOLD как точный перенос) работала
     на каждом шаге цикла, начиная со второго, без ручной сборки входа.
+
+    Диагностика эпохи ПЕРЕСЧИТЫВАЕТСЯ из реализованного состояния
+    (`build_decision_context`), а не переносится вперёд: раньше эти слоты не
+    заполнялись вовсе, и специалист на T1/T2 видел None там, где на T0 у него
+    было evidence -- активные гипотезы отклонялись из-за отсутствия
+    свидетельств, а не из-за состояния. Копия T0-диагностики была бы столь же
+    неверной: она описывала бы прошлое поле как настоящее.
+
+    `economic_context` -- статический контекст своего прогона и переносится
+    как есть. `compensation_state` -- динамический факт, строителя у него
+    сейчас нет, и он остаётся пустым: протянуть сюда компенсацию прошлой
+    эпохи значило бы выдать устаревшее число за наблюдение этой.
     """
 
     horizon = previous_input.horizon_context
+    next_state = previous_result.next_state
     next_horizon = HorizonContext(
-        decision_date=previous_result.next_state.metadata.date,
+        decision_date=next_state.metadata.date,
         horizon_end=horizon.horizon_end,
         remaining_steps=max(horizon.remaining_steps - 1, 0),
     )
     return DecisionStepInput(
-        state=previous_result.next_state,
+        state=next_state,
         horizon_context=next_horizon,
         memory_slice=previous_input.memory_slice,
         production_allowed_actions=previous_input.production_allowed_actions,
         injection_allowed_actions=previous_input.injection_allowed_actions,
         previous_committed=previous_result.committed_candidate,
+        economic_context=previous_input.economic_context,
+        **build_decision_context(next_state),
     )
 
 

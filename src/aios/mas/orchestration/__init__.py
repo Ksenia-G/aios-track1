@@ -30,6 +30,11 @@ from aios.mas.orchestration.composition import (
     build_real_closed_loop,
     report_step_for,
 )
+from aios.mas.orchestration.context import (
+    CONTEXT_SLOTS,
+    build_decision_context,
+    epoch_evidence_id,
+)
 from aios.mas.orchestration.orchestrator import (
     CandidateRecord,
     ClosedLoopOrchestrator,
@@ -46,6 +51,7 @@ from aios.mas.orchestration.trace import DecisionTrace, StepFailure
 
 __all__ = [
     "CHDD",
+    "CONTEXT_SLOTS",
     "ArbiterLike",
     "BoundaryError",
     "CandidateExecutor",
@@ -73,8 +79,10 @@ __all__ = [
     "SpecialistFactory",
     "StateAdvancer",
     "StepFailure",
+    "build_decision_context",
     "build_real_closed_loop",
     "default_next_input",
+    "epoch_evidence_id",
     "identity_pre_action_validator",
     "never_conflict",
     "report_step_for",
