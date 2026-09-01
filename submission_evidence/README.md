@@ -13,9 +13,10 @@ did not exist when the numbers were produced.
 > while deterministic components retained numerical control authority. In the
 > frozen three-decision Model Y benchmark, MAS improved organizer-compatible
 > NPV from 5325.05 to 5342.72 mln RUB (+17.68 mln RUB, +0.332%) versus the
-> deterministic ablation. The committed improvement arose from a Guardian-valid
-> injection reallocation at the final decision epoch, increasing simulated oil
-> production while reducing cumulative water injection.
+> deterministic ablation. The committed improvement appeared at the final
+> decision epoch as a Guardian-valid, conserved redistribution of injection,
+> increasing simulated oil production while reducing cumulative water
+> injection.
 
 | | END-stamp objective @2014 | organizer-compatible NPV |
 |---|---:|---:|
@@ -84,6 +85,7 @@ Both are documented in `perf_004_errata.md`.
   `OFFICIAL_UNKNOWN_PORT`;
 - no statement about organizer acceptance tolerance;
 - **the model did not choose numerical setpoints.** The LLM emitted structural
-  hypotheses only; every number reaching the simulator was produced by the
-  deterministic MagnitudeResolver, downstream of the specialists, under the
-  `NO_SETPOINTS_CROSS` boundary.
+  hypotheses only; every **numerical well control** reaching the simulator was
+  produced by the deterministic MagnitudeResolver, downstream of the
+  specialists, under the `NO_SETPOINTS_CROSS` boundary. Physical outcomes come
+  from OPM and economics from the CHDD calculator.

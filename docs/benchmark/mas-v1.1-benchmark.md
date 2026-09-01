@@ -97,6 +97,12 @@ Deck `compat_p002`, image `openporousmedia/opmreleases@sha256:18c497f6…`,
 horizon 2014-01-01 → 2015-12-01, 108 report steps, 49 wells, CHDD
 `7.0.2-negative-row-filter`, compensation `OFFICIAL_UNKNOWN_PORT`.
 
+**`PRE-END-STAMP HISTORICAL SCREEN / REFERENCE_ONLY`.** The figures below —
+including `B0_BASELINE` 1030.8777 and `B1_EXP003_HISTORICAL` 1190.5934 —
+predate the CHDD interval END-stamp correction (`c320087`) and are on the old
+START-stamp scale. They are kept as lineage, not as a current claim, and are
+not comparable with the frozen PERF-004 numbers.
+
 | variant | NPV mln RUB | Δ vs B0 | Δ% | class | Guardian | sims | controls | LLM |
 |---|---:|---:|---:|---|---|---:|---:|---|
 | `B2_EXP004` | 1826.2679 | +795.3902 | +77.16% | DIRECT | PASS | 1 | 211 | off |
@@ -110,10 +116,18 @@ re-derived candidate (1187.2390) and differs from the historical record
 (1190.5934) because its schedule differs — the two are listed separately
 rather than merged.
 
-`B4_MAS_ON` was **not run**: no approved cognitive provider exists in this
-project. `.env.example` declares only the deck and calculator paths, and
-`aios.mas.specialists.*.provider` contains a Protocol and a deterministic fake
-with no live client. That is a missing capability, not missing credentials.
+> **Historical note.** Everything in this section describes the FIRST measured
+> comparison, taken before an approved live cognitive provider was integrated.
+> At that time `B4_MAS_ON` was **not run**: `aios.mas.specialists.*.provider`
+> held a Protocol and a deterministic fake with no live client, which was a
+> missing capability rather than missing credentials.
+>
+> That is no longer the current state. The live cognitive branch exists, and
+> the current frozen MAS ON economic measurement is
+> **`PERF-004-CAUSAL-CLEAN-001`** (code `205ad86`): MAS OFF 5325.05 →
+> MAS ON 5342.72 mln RUB organizer-compatible, **+17.68 mln RUB (+0.332 %)**.
+> See [`submission_evidence/`](../../submission_evidence/README.md) for the
+> auditable package. Do not read the table above as the current headline.
 
 ## What the first run says about MAS
 
