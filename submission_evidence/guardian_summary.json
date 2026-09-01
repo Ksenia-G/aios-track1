@@ -1,0 +1,81 @@
+{
+  "source": "frozen PERF-004 benchmark_summary.json",
+  "distinction": "guardian_check_count / guardian_failed_count describe the COMMITTED trajectory and are comparable across variants. guardian_*_total and candidates_* describe the whole candidate SEARCH: a rejected candidate is the Guardian doing its job during search, never a violation in what was committed.",
+  "committed_trajectory": {
+    "mas_off": {
+      "guardian_check_count": 246,
+      "guardian_failed_count": 0,
+      "guardian_pass": true
+    },
+    "mas_on": {
+      "guardian_check_count": 246,
+      "guardian_failed_count": 0,
+      "guardian_pass": true
+    }
+  },
+  "search_wide": {
+    "mas_off": {
+      "guardian_checks_total": 492,
+      "guardian_failed_total": 0,
+      "guardian_candidates_evaluated": 6,
+      "guardian_candidates_rejected": 0,
+      "simulation_count": 6
+    },
+    "mas_on": {
+      "guardian_checks_total": 1394,
+      "guardian_failed_total": 10,
+      "guardian_candidates_evaluated": 17,
+      "guardian_candidates_rejected": 10,
+      "simulation_count": 17
+    }
+  },
+  "search_funnel": {
+    "mas_off": [
+      {
+        "agent_finalists": 0,
+        "effective_date": "2014-01-01",
+        "physical_candidates_evaluated": 2,
+        "unique_control_candidates": 2,
+        "virtual_candidates_generated": 2
+      },
+      {
+        "agent_finalists": 0,
+        "effective_date": "2014-09-01",
+        "physical_candidates_evaluated": 2,
+        "unique_control_candidates": 2,
+        "virtual_candidates_generated": 2
+      },
+      {
+        "agent_finalists": 0,
+        "effective_date": "2015-04-01",
+        "physical_candidates_evaluated": 2,
+        "unique_control_candidates": 2,
+        "virtual_candidates_generated": 2
+      }
+    ],
+    "mas_on": [
+      {
+        "agent_finalists": 6,
+        "effective_date": "2014-01-01",
+        "physical_candidates_evaluated": 8,
+        "unique_control_candidates": 18,
+        "virtual_candidates_generated": 18
+      },
+      {
+        "agent_finalists": 2,
+        "effective_date": "2014-09-01",
+        "physical_candidates_evaluated": 4,
+        "unique_control_candidates": 4,
+        "virtual_candidates_generated": 4
+      },
+      {
+        "agent_finalists": 3,
+        "effective_date": "2015-04-01",
+        "physical_candidates_evaluated": 5,
+        "unique_control_candidates": 5,
+        "virtual_candidates_generated": 5
+      }
+    ]
+  },
+  "committed_trajectory_is_guardian_clean": true
+}
