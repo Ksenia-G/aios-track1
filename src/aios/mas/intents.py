@@ -64,6 +64,113 @@ def net_total_effect_for(action: InjectionAction) -> NetTotalEffect:
     return _INJECTION_NET_EFFECT[InjectionAction(action)]
 
 
+#: Списочные поля InjectionIntent. Это ссылки на объекты карты, а не величины.
+INJECTION_LIST_FIELDS: tuple[str, ...] = (
+    "donor_wells",
+    "recipient_wells",
+    "source_regions",
+    "target_regions",
+    "evidence_ids",
+)
+
+#: Качественная интенсивность любого действия, кроме бездействия.
+_QUALITATIVE = (Intensity.SMALL, Intensity.MODERATE, Intensity.AGGRESSIVE)
+
+
+@dataclass(frozen=True, slots=True)
+class InjectionFieldContract:
+    """Статический полевой контракт одного InjectionAction.
+
+    Всё, что здесь описано, проверяется без обращения к StateCard: это
+    свойства самой комбинации полей. Реляционные и заземляющие правила
+    (совпадение регионов, существование скважины, известный evidence_id)
+    сюда не помещаются намеренно -- их нельзя выразить в статической схеме,
+    и они остаются доменными проверками.
+    """
+
+    directions: tuple[Direction, ...]
+    intensities: tuple[Intensity, ...]
+    #: Списки, которые обязаны быть непустыми.
+    required_lists: tuple[str, ...] = ()
+    #: Списки, которые обязаны быть пустыми.
+    empty_lists: tuple[str, ...] = ()
+    #: Группы, в каждой из которых непустым обязан быть хотя бы один список.
+    either_lists: tuple[tuple[str, ...], ...] = ()
+
+
+#: ЕДИНСТВЕННЫЙ источник статического полевого контракта Injection.
+#:
+#: Его читают и `InjectionIntent.__post_init__`, и построитель схемы
+#: структурированного вывода. До этого домен и схема описывали контракт
+#: порознь: схема объявляла все поля независимо необязательными, домен
+#: требовал их сочетаний, и ответ провайдера, честно соблюдавший схему,
+#: получал `intents[0] is not a valid InjectionIntent` -- retry, а затем
+#: DETERMINISTIC_FALLBACK на ровном месте. Две таблицы правил здесь больше
+#: не заводятся: разойтись им негде.
+INJECTION_ACTION_CONTRACT: dict[InjectionAction, InjectionFieldContract] = {
+    InjectionAction.HOLD: InjectionFieldContract(
+        directions=(Direction.NONE,),
+        intensities=(Intensity.NONE,),
+        empty_lists=("donor_wells", "recipient_wells", "source_regions", "target_regions"),
+    ),
+    InjectionAction.SCALE_TOTAL_INJECTION: InjectionFieldContract(
+        directions=(Direction.UP, Direction.DOWN),
+        intensities=_QUALITATIVE,
+        required_lists=("evidence_ids",),
+        empty_lists=("donor_wells", "recipient_wells"),
+    ),
+    InjectionAction.SUPPORT_REGION: InjectionFieldContract(
+        directions=(Direction.UP,),
+        intensities=_QUALITATIVE,
+        required_lists=("evidence_ids",),
+        either_lists=(("recipient_wells", "target_regions"),),
+    ),
+    InjectionAction.REDUCE_SUPPORT_PATH: InjectionFieldContract(
+        directions=(Direction.DOWN,),
+        intensities=_QUALITATIVE,
+        required_lists=("evidence_ids",),
+        either_lists=(("donor_wells", "source_regions"),),
+    ),
+    InjectionAction.REALLOCATE_INJECTION: InjectionFieldContract(
+        directions=(Direction.NONE,),
+        intensities=_QUALITATIVE,
+        required_lists=(
+            "donor_wells",
+            "recipient_wells",
+            "source_regions",
+            "target_regions",
+            "evidence_ids",
+        ),
+    ),
+    InjectionAction.REBALANCE_ACROSS_BLOCKS: InjectionFieldContract(
+        directions=(Direction.NONE,),
+        intensities=_QUALITATIVE,
+        required_lists=(
+            "donor_wells",
+            "recipient_wells",
+            "source_regions",
+            "target_regions",
+            "evidence_ids",
+        ),
+    ),
+}
+
+
+def injection_field_contract(action: InjectionAction) -> InjectionFieldContract:
+    """Статический полевой контракт действия. Читается схемой и доменом."""
+    return INJECTION_ACTION_CONTRACT[InjectionAction(action)]
+
+
+def _direction_rule(contract: InjectionFieldContract) -> str:
+    return "direction must be " + " or ".join(str(item) for item in contract.directions)
+
+
+def _intensity_rule(contract: InjectionFieldContract) -> str:
+    if contract.intensities == _QUALITATIVE:
+        return "intensity required"
+    return "intensity must be " + " or ".join(str(item) for item in contract.intensities)
+
+
 def _canonical(values: Iterable[str]) -> tuple[str, ...]:
     """Порядок в этих полях не несёт семантики: канонизируем сортировкой."""
     return tuple(sorted(values))
@@ -202,108 +309,42 @@ class InjectionIntent:
         Intensity(self.intensity)
         UncertaintyLevel(self.uncertainty)
 
-        if action is InjectionAction.HOLD:
-            _require(self.direction is Direction.NONE, f"{where}.HOLD: direction must be NONE")
-            _require(self.intensity is Intensity.NONE, f"{where}.HOLD: intensity must be NONE")
-            _require(not self.donor_wells, f"{where}.HOLD: donor_wells must be empty")
-            _require(not self.recipient_wells, f"{where}.HOLD: recipient_wells must be empty")
-            _require(not self.source_regions, f"{where}.HOLD: source_regions must be empty")
-            _require(not self.target_regions, f"{where}.HOLD: target_regions must be empty")
-        elif action is InjectionAction.SCALE_TOTAL_INJECTION:
+        # Статическая часть контракта читается из INJECTION_ACTION_CONTRACT --
+        # той же таблицы, из которой выводится схема структурированного
+        # вывода. Второй, написанной здесь руками копии правил больше нет:
+        # именно её расхождение со схемой и приводило к отказу домена на
+        # ответе, честно соблюдавшем схему.
+        contract = injection_field_contract(action)
+        _require(
+            self.direction in contract.directions, f"{where}.{action}: {_direction_rule(contract)}"
+        )
+        _require(
+            self.intensity in contract.intensities, f"{where}.{action}: {_intensity_rule(contract)}"
+        )
+        for field_name in contract.empty_lists:
+            _require(not getattr(self, field_name), f"{where}.{action}: {field_name} must be empty")
+        for field_name in contract.required_lists:
+            _require(bool(getattr(self, field_name)), f"{where}.{action}: {field_name} required")
+        for group in contract.either_lists:
             _require(
-                self.direction in (Direction.UP, Direction.DOWN),
-                f"{where}.SCALE_TOTAL_INJECTION: direction must be UP or DOWN",
+                any(bool(getattr(self, field_name)) for field_name in group),
+                f"{where}.{action}: {' or '.join(group)} required",
             )
-            _require(
-                self.intensity is not Intensity.NONE,
-                f"{where}.SCALE_TOTAL_INJECTION: intensity required",
-            )
-            _require(
-                not self.donor_wells, f"{where}.SCALE_TOTAL_INJECTION: donor_wells must be empty"
-            )
-            _require(
-                not self.recipient_wells,
-                f"{where}.SCALE_TOTAL_INJECTION: recipient_wells must be empty",
-            )
-        elif action is InjectionAction.SUPPORT_REGION:
-            _require(
-                self.direction is Direction.UP, f"{where}.SUPPORT_REGION: direction must be UP"
-            )
-            _require(
-                self.intensity is not Intensity.NONE, f"{where}.SUPPORT_REGION: intensity required"
-            )
-            _require(
-                bool(self.recipient_wells) or bool(self.target_regions),
-                f"{where}.SUPPORT_REGION: recipient_wells or target_regions required",
-            )
-        elif action is InjectionAction.REDUCE_SUPPORT_PATH:
-            _require(
-                self.direction is Direction.DOWN,
-                f"{where}.REDUCE_SUPPORT_PATH: direction must be DOWN",
-            )
-            _require(
-                self.intensity is not Intensity.NONE,
-                f"{where}.REDUCE_SUPPORT_PATH: intensity required",
-            )
-            _require(
-                bool(self.donor_wells) or bool(self.source_regions),
-                f"{where}.REDUCE_SUPPORT_PATH: donor_wells or source_regions required",
-            )
-        elif action is InjectionAction.REALLOCATE_INJECTION:
-            _require(
-                self.direction is Direction.NONE,
-                f"{where}.REALLOCATE_INJECTION: direction must be NONE",
-            )
-            _require(
-                self.intensity is not Intensity.NONE,
-                f"{where}.REALLOCATE_INJECTION: intensity required",
-            )
-            _require(bool(self.donor_wells), f"{where}.REALLOCATE_INJECTION: donor_wells required")
-            _require(
-                bool(self.recipient_wells),
-                f"{where}.REALLOCATE_INJECTION: recipient_wells required",
-            )
-            _require(
-                bool(self.source_regions), f"{where}.REALLOCATE_INJECTION: source_regions required"
-            )
-            _require(
-                bool(self.target_regions), f"{where}.REALLOCATE_INJECTION: target_regions required"
-            )
+
+        # Реляционная часть: сравнение двух полей между собой. В статической
+        # схеме она невыразима и потому остаётся здесь, а не дублируется.
+        if action is InjectionAction.REALLOCATE_INJECTION:
             _require(
                 _canonical(self.source_regions) == _canonical(self.target_regions),
                 f"{where}.REALLOCATE_INJECTION: source_regions and target_regions must be the same scope",
             )
         elif action is InjectionAction.REBALANCE_ACROSS_BLOCKS:
             _require(
-                self.direction is Direction.NONE,
-                f"{where}.REBALANCE_ACROSS_BLOCKS: direction must be NONE",
-            )
-            _require(
-                self.intensity is not Intensity.NONE,
-                f"{where}.REBALANCE_ACROSS_BLOCKS: intensity required",
-            )
-            _require(
-                bool(self.donor_wells), f"{where}.REBALANCE_ACROSS_BLOCKS: donor_wells required"
-            )
-            _require(
-                bool(self.recipient_wells),
-                f"{where}.REBALANCE_ACROSS_BLOCKS: recipient_wells required",
-            )
-            _require(
-                bool(self.source_regions),
-                f"{where}.REBALANCE_ACROSS_BLOCKS: source_regions required",
-            )
-            _require(
-                bool(self.target_regions),
-                f"{where}.REBALANCE_ACROSS_BLOCKS: target_regions required",
-            )
-            _require(
                 _canonical(self.source_regions) != _canonical(self.target_regions),
                 f"{where}.REBALANCE_ACROSS_BLOCKS: source_regions and target_regions must differ",
             )
 
         if action is not InjectionAction.HOLD:
-            _require(bool(self.evidence_ids), f"{where}: non-HOLD intent requires evidence_ids")
             _validate_rationale_short(self.rationale_short, f"{where}.rationale_short")
 
     @property

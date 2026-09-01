@@ -486,14 +486,24 @@ def test_production_schema_permits_only_the_parser_fields() -> None:
 
 
 def test_injection_schema_permits_only_the_parser_fields() -> None:
+    from aios.mas.intents import InjectionAction
     from aios.mas.providers import injection_response_schema, schema_field_names
     from aios.mas.specialists.injection.parser import _ALLOWED_INTENT_KEYS
 
     schema = injection_response_schema()
     # PERF-003B: ответ несёт пучок гипотез; поля намерения те же самые.
+    # MAS-INJECTION-INTENT-CONTRACT-001: одного широкого объекта здесь больше
+    # нет -- intent разобран по действию, но НАБОР полей у каждой ветви тот же
+    # самый, и лишнего поля не появляется ни в одной.
     intent = schema["properties"]["hypotheses"]["items"]["properties"]["intents"]["items"]
-    assert set(intent["properties"]) == set(_ALLOWED_INTENT_KEYS)
-    assert intent["additionalProperties"] is False
+    branches = intent["anyOf"]
+    for branch in branches:
+        assert set(branch["properties"]) == set(_ALLOWED_INTENT_KEYS)
+        assert set(branch["required"]) == set(_ALLOWED_INTENT_KEYS)
+        assert branch["additionalProperties"] is False
+    assert {branch["properties"]["action"]["enum"][0] for branch in branches} == {
+        str(action) for action in InjectionAction
+    }
     assert schema_field_names(schema) >= set(_ALLOWED_INTENT_KEYS)
 
 
