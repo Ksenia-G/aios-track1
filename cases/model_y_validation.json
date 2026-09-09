@@ -40,8 +40,8 @@
     "timeout_seconds": 1800
   },
   "acceptance": {
-    "baseline_npv_mln_rub": 1030.877696,
+    "baseline_npv_mln_rub": 1082.233754138962,
     "npv_tolerance_mln_rub": 1e-06,
-    "reference": "OFFICIAL-003B normalized baseline, NOT_OFFICIAL_PENDING_TNAV_REFERENCE"
+    "reference": "OFFICIAL-003B normalized baseline under the END-stamp interval attribution (bc899ea), NOT_OFFICIAL_PENDING_TNAV_REFERENCE"
   }
 }
