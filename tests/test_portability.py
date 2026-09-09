@@ -177,6 +177,14 @@ def test_repository_does_not_reference_sibling_worktrees() -> None:
 
 
 def test_external_materials_are_not_committed() -> None:
+    """Внешние материалы организаторов не должны попасть в репозиторий.
+
+    Проверка по индексу git, а не обходу каталога (rglob): локально Model Y и
+    CHDD присутствуют как нетрекаемые рабочие каталоги, и обход всего дерева
+    давал бы ложный красный семафор на машине разработчика. Контракт --
+    публикация (отслеживаемые файлы), а не локальная файловая система, на
+    которой материалы лежат законно.
+    """
     forbidden = (
         "Model_Y.zip",
         "MODEL_Y.EGRID",
@@ -187,9 +195,24 @@ def test_external_materials_are_not_committed() -> None:
         "chdd_model.py",
         "excel_io.py",
     )
-    present = [name for name in forbidden if any(REPO_ROOT.rglob(name)) and ".venv" not in name]
+    tracked = {path.name for path in _all_tracked_files()}
+    present = [name for name in forbidden if name in tracked]
 
     assert present == [], present
+
+
+def _all_tracked_files() -> list[Path]:
+    """Все отслеживаемые git-файлы (включая бинарные), без R-дерева проекта."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        pytest.skip("git is not available to enumerate tracked files")
+    return [REPO_ROOT / name for name in result.stdout.split("\0") if name]
 
 
 def test_failed_experiment_run_does_not_destroy_tracked_evidence(

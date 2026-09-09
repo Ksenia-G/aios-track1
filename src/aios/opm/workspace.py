@@ -11,6 +11,8 @@
 полутора минут счёта.
 """
 
+import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +64,39 @@ def _rewrite_data(text: str, schedule_include: str) -> str:
     return text.replace(needle, replacement, 1)
 
 
+def _make_container_writable(directory: Path) -> None:
+    """Сделать каталог доступным на запись пользователю контейнера.
+
+    OPM-образ запускает `flow` от внутреннего пользователя `opm` (uid 1001),
+    который не совпадает с uid хоста. Docker монтирует рабочую копию как есть,
+    поэтому каталог вывода, созданный хостом, должен быть открыт на запись
+    для «остальных» -- иначе `flow` падает с `Failed opening file
+    /data/OUT/...PRT for StreamLog`. Это детерминировано: права выставляются
+    явно, а не наследуются от umask хоста, поэтому прогон не зависит от
+    раскладки пользователей на машине организатора.
+    """
+
+    os.chmod(directory, 0o777)
+
+
+_TNAV_IF_ZERO_RE = re.compile(r"(?m)^\s*#if\s+0\b.*?^\s*#endif\s*$", re.DOTALL)
+
+
+def _strip_tnav_dead_code(deck_text: str) -> str:
+    """Убрать блоки ``#if 0 ... #endif`` tNavigator из текста колоды.
+
+    Model Y распространяется организаторами как экспорт tNavigator: в начале
+    .DATA стоит ``#if 0 // tNavigator keyword ... #endif`` -- синтаксис
+    условной компиляции tNavigator, который парсер OPM Flow не понимает даже
+    при ``--parsing-strictness=low``. Семантически это мёртвый код (``#if 0``
+    = «выключено»), поэтому удаление детерминировано и не меняет физику.
+    Без этого симулятор падает на `String #if 0 ... not formatted as valid
+    keyword`, и прогон выглядит упавшим при исправной колоде.
+    """
+
+    return _TNAV_IF_ZERO_RE.sub("", deck_text)
+
+
 def prepare_workspace(
     case: Case, *, root: Path, history_text: str, schedule_text: str
 ) -> Workspace:
@@ -99,12 +134,16 @@ def prepare_workspace(
 
     data_file = root / case.history.data_file
     data_file.write_text(
-        _rewrite_data(data_source.read_text(encoding="utf-8"), case.history.schedule_include),
+        _rewrite_data(
+            _strip_tnav_dead_code(data_source.read_text(encoding="utf-8")),
+            case.history.schedule_include,
+        ),
         encoding="utf-8",
     )
 
     output_dir = root / OUTPUT_DIRNAME
     output_dir.mkdir()
+    _make_container_writable(output_dir)
     return Workspace(
         root=root,
         data_file=data_file,

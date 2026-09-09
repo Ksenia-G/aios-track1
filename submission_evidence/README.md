@@ -1,3 +1,9 @@
+> **SUPERSEDED.** Этот пакет фиксирует прогон `PERF-004-CAUSAL-CLEAN-001`
+> (код `205ad86`, MAS ON 5342.722480331016 млн ₽). Он остаётся верным как
+> архив того прогона и **не** описывает текущую систему. Действующий
+> замороженный результат — `KT3-FINAL-EVIDENCE-PATCH-001` (код `3582a40`,
+> MAS ON 5412.255034 млн ₽, +87.208 над MAS OFF); см. README репозитория.
+
 # Submission evidence — PERF-004-CAUSAL-CLEAN-001
 
 Auditable package for the accepted Model Y economic measurement.

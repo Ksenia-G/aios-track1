@@ -76,8 +76,11 @@ PredictiveSafetyScreen, Closed-loop Orchestrator, runtime execution adapter
 (ScheduleCompiler/SimulatorRuntime поверх MagnitudeCandidate), LLM-провайдер с
 PromptBuilder/GroundingAuditor/ProposalCompiler и CompensationPolicy port
 **реализованы** и участвовали в замороженном измерении
-`PERF-004-CAUSAL-CLEAN-001` (код `205ad86`): MAS OFF 5325.05 -> MAS ON 5342.72
-млн ₽, прирост +17.68 млн ₽ (+0.332 %). Свидетельства:
+`KT3-FINAL-EVIDENCE-PATCH-001` (код `3582a40`): MAS OFF 5325.046561 -> MAS ON
+5412.255034 млн ₽, прирост **+87.208 млн ₽**. Guardian траектории: 5904
+проверки закоммиченного кандидата, 0 нарушений. Из трёх эпох решения последняя
+закрылась детерминированным полом после `provider_error`. Архив прежнего
+измерения `PERF-004-CAUSAL-CLEAN-001`:
 [`submission_evidence/`](../../submission_evidence/README.md).
 
 Доказано ровно то, что измерено: один замкнутый прогон бенчмарка на три эпохи

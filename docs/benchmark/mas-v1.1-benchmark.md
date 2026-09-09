@@ -124,8 +124,12 @@ rather than merged.
 >
 > That is no longer the current state. The live cognitive branch exists, and
 > the current frozen MAS ON economic measurement is
-> **`PERF-004-CAUSAL-CLEAN-001`** (code `205ad86`): MAS OFF 5325.05 →
-> MAS ON 5342.72 mln RUB organizer-compatible, **+17.68 mln RUB (+0.332 %)**.
+> **`KT3-FINAL-EVIDENCE-PATCH-001`** (code `3582a40`): MAS OFF 5325.046561 →
+> MAS ON 5412.255034 mln RUB organizer-compatible, **+87.208 mln RUB**.
+> Trajectory Guardian: 5904 committed checks, 0 failed. Three decision epochs,
+> of which the last closed on the deterministic floor after a `provider_error`.
+> The earlier `PERF-004-CAUSAL-CLEAN-001` figure (code `205ad86`, MAS ON
+> 5342.722480331016) is superseded and kept only as a historical archive.
 > See [`submission_evidence/`](../../submission_evidence/README.md) for the
 > auditable package. Do not read the table above as the current headline.
 

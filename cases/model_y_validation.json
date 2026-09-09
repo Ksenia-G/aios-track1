@@ -34,7 +34,9 @@
   "simulator": {
     "docker_image": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
     "flow_command": "flow",
-    "extra_args": [],
+    "extra_args": [
+      "--parsing-strictness=low"
+    ],
     "timeout_seconds": 1800
   },
   "acceptance": {
