@@ -53,6 +53,7 @@ from aios.mas.orchestration import (
     build_real_closed_loop,
     default_next_input,
 )
+from aios.mas.orchestration.economics import build_economic_context
 from aios.mas.specialists.injection import InjectionController
 from aios.mas.specialists.injection.scope import groundable_injection_actions
 from aios.mas.specialists.production import ProductionController
@@ -345,7 +346,7 @@ def run_mas_variant(
     run_id: str | None = None,
     production_provider: object | None = None,
     injection_provider: object | None = None,
-    simulation_budget: int = 8,
+    simulation_budget: int = 14,
     decision_steps: int = 1,
     notes: tuple[str, ...] = (),
 ) -> BenchmarkOutcome:
@@ -419,6 +420,10 @@ def run_mas_variant(
         memory_slice=MemorySlice(),
         production_allowed_actions=PRODUCTION_ACTIONS,
         injection_allowed_actions=injection_actions_for_state(initial_state_card),
+        # Статический экономический контекст прогона. Пустой слот означал, что
+        # специалист видел обводнённость и не видел ни цены, ни затрат, то есть
+        # размен нефть/жидкость нельзя было даже поставить как вопрос.
+        economic_context=build_economic_context(context.case),
         **diagnostics,
     )
 

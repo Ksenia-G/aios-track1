@@ -290,6 +290,16 @@ class WellStateSnapshot:
     producer_bhp_margin: float | None
     injector_bhp_margin: float | None
     wlpr_margin: float | None
+    #: Давление призабойного блока до действия. Отдельно от WBHP: разница между
+    #: ними и есть депрессия, которую скважина СЕЙЧАС отрабатывает.
+    block_pressure: float | None = None
+    #: Отработанная депрессия = block_pressure - BHP. Пре-акционная величина.
+    drawdown_used: float | None = None
+    #: Во сколько раз оставшийся до предела запас депрессии больше уже
+    #: отработанной. None, когда отработанная депрессия неположительна или
+    #: неизвестна: делить на ноль нельзя, а подставить туда число значило бы
+    #: выдумать наблюдение. Ноль означает "запаса нет", а не "нет данных".
+    drawdown_spare_ratio: float | None = None
 
     def __post_init__(self) -> None:
         required_text(self.well_id, "well.well_id")
@@ -310,6 +320,9 @@ class WellStateSnapshot:
             "producer_bhp_margin",
             "injector_bhp_margin",
             "wlpr_margin",
+            "block_pressure",
+            "drawdown_used",
+            "drawdown_spare_ratio",
         ):
             optional_number(getattr(self, name), f"well.{name}")
 
@@ -332,11 +345,14 @@ class WellStateSnapshot:
                 "WOPT": self.wopt,
                 "WWPT": self.wwpt,
                 "WWIT": self.wwit,
+                "WBP9": self.block_pressure,
             },
             "derived": {
                 "producer_bhp_margin": self.producer_bhp_margin,
                 "injector_bhp_margin": self.injector_bhp_margin,
                 "wlpr_margin": self.wlpr_margin,
+                "drawdown_used": self.drawdown_used,
+                "drawdown_spare_ratio": self.drawdown_spare_ratio,
             },
         }
 
@@ -373,6 +389,13 @@ class WellStateSnapshot:
             wopt=optional_number(realized["WOPT"], f"{where}.realized.WOPT"),
             wwpt=optional_number(realized["WWPT"], f"{where}.realized.WWPT"),
             wwit=optional_number(realized["WWIT"], f"{where}.realized.WWIT"),
+            block_pressure=optional_number(realized.get("WBP9"), f"{where}.realized.WBP9"),
+            drawdown_used=optional_number(
+                derived.get("drawdown_used"), f"{where}.derived.drawdown_used"
+            ),
+            drawdown_spare_ratio=optional_number(
+                derived.get("drawdown_spare_ratio"), f"{where}.derived.drawdown_spare_ratio"
+            ),
             producer_bhp_margin=optional_number(
                 require_key(derived, "producer_bhp_margin", f"{where}.derived"),
                 f"{where}.derived.producer_bhp_margin",
@@ -397,6 +420,10 @@ class ConstraintState:
     violations: tuple[str, ...] = ()
     binding_constraints: tuple[str, ...] = ()
     margins: Mapping[str, float | None] = field(default_factory=dict)
+    #: Как симулятор обходится с командой, превышающей то, что скважина у
+    #: своего предела способна отдать. Формулировка нейтральная: она описывает
+    #: механику, а не одобряет какое-либо направление.
+    semantics: tuple[str, ...] = ()
 
     def to_json(self) -> dict[str, JsonValue]:
         return {
@@ -405,6 +432,7 @@ class ConstraintState:
             "violations": list(self.violations),
             "binding_constraints": list(self.binding_constraints),
             "margins": normalize_json(dict(self.margins)),
+            "semantics": list(self.semantics),
         }
 
     @classmethod
@@ -427,6 +455,7 @@ class ConstraintState:
             margins=number_mapping(
                 require_key(data, "margins", "constraints"), "constraints.margins"
             ),
+            semantics=text_tuple(data.get("semantics", []), "constraints.semantics"),
         )
 
 

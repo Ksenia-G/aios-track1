@@ -28,6 +28,7 @@ from aios.mas.arbitration.policy import ConflictPolicy, NoRound2ConflictPolicy
 from aios.mas.common import CandidateKind
 from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.intents import InjectionIntent, ProductionIntent
+from aios.mas.magnitude_resolution.coverage import COVERAGE_RESERVE, PREFERRED_RESERVE
 from aios.mas.proposals import InjectionProposal, ProductionProposal
 
 
@@ -159,6 +160,34 @@ class _AgentBundleSpec:
         )
 
 
+def _paired_hypotheses(
+    production: tuple[ProductionProposal, ...],
+    injection: tuple[InjectionProposal, ...],
+) -> list[tuple[ProductionProposal, InjectionProposal]]:
+    """Пары гипотез двух ролей, по диагонали суммы рангов.
+
+    Первой идёт пара (primary, primary): прежнее поведение обязано остаться
+    первым, а не потеряться среди соседей. Дальше пары обходятся так, что обе
+    роли продвигаются одновременно, поэтому ни одна из них не съедает бюджет
+    целиком. Декартово произведение здесь недопустимо: 4x4 гипотезы дали бы
+    16 семейств кандидатов при физическом бюджете 8.
+    """
+    if not production or not injection:
+        return []
+    pairs: list[tuple[ProductionProposal, InjectionProposal]] = []
+    seen: set[tuple[int, int]] = set()
+    for total in range(len(production) + len(injection) - 1):
+        for p_index in range(len(production)):
+            i_index = total - p_index
+            if not 0 <= i_index < len(injection):
+                continue
+            if (p_index, i_index) in seen:
+                continue
+            seen.add((p_index, i_index))
+            pairs.append((production[p_index], injection[i_index]))
+    return pairs
+
+
 def _generate_agent_bundle_pool(
     *,
     production_primary: ProductionProposal,
@@ -210,6 +239,42 @@ def _generate_agent_bundle_pool(
     return pool
 
 
+def _coverage_pool(
+    *,
+    considered: tuple[ProductionProposal, ...],
+    preferred: tuple[ProductionProposal, ...],
+    injection_baseline: InjectionProposal,
+    production_baseline: ProductionProposal,
+    seen_keys: set[str],
+) -> list[_AgentBundleSpec]:
+    """Bundles для рассмотренных, но не рекомендованных структурных альтернатив.
+
+    Каждая такая альтернатива уже написана специалистом целиком: действие,
+    направление, качественная сила и цели. Здесь она только получает
+    собственный bundle, чтобы не исчезнуть между предпочтением и физикой.
+    Ничего не синтезируется: пустой `considered` даёт пустой список.
+
+    Инъекция берётся baseline: покрытие проверяет ровно одно производственное
+    направление, а не новую совместную гипотезу.
+    """
+    specs: list[_AgentBundleSpec] = []
+    for proposal in considered:
+        if not _production_is_novel(proposal, production_baseline):
+            continue
+        if any(proposal.digest() == item.digest() for item in preferred):
+            continue
+        spec = _AgentBundleSpec(
+            production_proposal=proposal,
+            injection_proposal=injection_baseline,
+            exploration=True,
+        )
+        if spec.structural_key in seen_keys:
+            continue
+        seen_keys.add(spec.structural_key)
+        specs.append(spec)
+    return specs
+
+
 def _canonical_pool_order(pool: list[_AgentBundleSpec]) -> list[_AgentBundleSpec]:
     """Combined primary (exploration=False) first, then neutral canonical order.
 
@@ -237,19 +302,31 @@ class DeterministicArbiter:
                 "to preserve HOLD + DETERMINISTIC_BASELINE"
             )
 
-        production_primary = envelope.production_output.primary_proposal
         production_baseline = envelope.production_output.baseline_proposal
         injection_baseline = envelope.injection_output.baseline_proposal
 
         # Пучок структурных гипотез: каждая получает собственное семейство
         # кандидатов. Пустые alternatives дают ровно прежний набор.
+        #
+        # Пучки обеих ролей обходятся ОДИНАКОВО. Раньше здесь перебирались
+        # только гипотезы закачки, а `production_primary` оставался ровно
+        # одним предложением: альтернативная производственная гипотеза, даже
+        # если бы специалист её вернул, не получала ни одного bundle и
+        # исчезала молча.
+        #
+        # Обход диагональный, а не декартово произведение: число гипотез
+        # каждой роли ограничено сверху, но их произведение росло бы быстрее
+        # физического бюджета и вытесняло бы гипотезы младших рангов.
         pool = []
         seen_keys: set[str] = set()
-        for hypothesis in envelope.injection_output.hypotheses():
+        for production_hypothesis, injection_hypothesis in _paired_hypotheses(
+            envelope.production_output.hypotheses(),
+            envelope.injection_output.hypotheses(),
+        ):
             for spec in _generate_agent_bundle_pool(
-                production_primary=production_primary,
+                production_primary=production_hypothesis,
                 production_baseline=production_baseline,
-                injection_primary=hypothesis,
+                injection_primary=injection_hypothesis,
                 injection_baseline=injection_baseline,
             ):
                 if spec.structural_key in seen_keys:
@@ -258,14 +335,32 @@ class DeterministicArbiter:
                 pool.append(spec)
         ordered_pool = _canonical_pool_order(pool)
 
-        remaining_budget = envelope.simulation_budget.max_candidates - 2
-        selected_agent_specs = ordered_pool[: max(remaining_budget, 0)]
+        # Два раздельных резерва. Предпочтение сохраняет ровно те шесть слотов,
+        # что были у него до покрытия; слоты покрытия ему недоступны, и наоборот.
+        # Неиспользованные слоты покрытия сгорают: неполный структурный ответ не
+        # должен вознаграждаться дополнительной силой поиска.
+        agent_budget = max(envelope.simulation_budget.max_candidates - 2, 0)
+        preferred_slots = min(PREFERRED_RESERVE, agent_budget)
+        coverage_slots = min(COVERAGE_RESERVE, agent_budget - preferred_slots)
+        selected_agent_specs = ordered_pool[:preferred_slots]
+
+        # Coverage-гипотезы: LLM-авторизованные рассмотренные альтернативы,
+        # закрывающие ячейку, которую не занял ни один предпочтённый вариант.
+        # Ни одно действие здесь не изобретается -- берётся ровно то, что
+        # специалист уже написал.
+        coverage_specs = _coverage_pool(
+            considered=envelope.production_output.considered_alternatives,
+            preferred=envelope.production_output.hypotheses(),
+            injection_baseline=injection_baseline,
+            production_baseline=production_baseline,
+            seen_keys=seen_keys,
+        )[:coverage_slots]
 
         bundles: list[DecisionBundle] = [
             _hold_bundle(),
             _baseline_bundle(production_baseline, injection_baseline),
         ]
-        for rank, spec in enumerate(selected_agent_specs, start=2):
+        for rank, spec in enumerate([*selected_agent_specs, *coverage_specs], start=2):
             bundles.append(
                 DecisionBundle(
                     kind=spec.bundle.kind,

@@ -225,6 +225,49 @@ def _envelope_schema(
         }
         required = ["hypotheses"]
         properties.pop("intents")
+    if "considered_alternatives" in top_level:
+        # Отдельная коллекция, а не флаг внутри hypotheses: структурный
+        # контрфакт, который специалист рассмотрел и НЕ рекомендует, не должен
+        # иметь возможности случайно попасть в ранжирование предпочтений.
+        properties["considered_alternatives"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"intents": intents_array},
+                "required": ["intents"],
+                "additionalProperties": False,
+            },
+        }
+        required.append("considered_alternatives")
+    if "coverage_declarations" in top_level:
+        # Слой полноты: на каждый заданный структурный вопрос ровно один ответ.
+        # Ни одного численного поля здесь нет -- только действие, класс охвата
+        # и распоряжение.
+        properties["coverage_declarations"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": _enum_values(action_enum)},
+                    "scope_class": {"type": "string", "enum": ["SELECTIVE", "BROAD"]},
+                    "disposition": {
+                        "type": "string",
+                        "enum": ["PREFERRED", "CONSIDERED_NOT_PREFERRED", "DECLINED"],
+                    },
+                    "decline_reason": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": [
+                    "action",
+                    "scope_class",
+                    "disposition",
+                    "decline_reason",
+                    "explanation",
+                ],
+                "additionalProperties": False,
+            },
+        }
+        required.append("coverage_declarations")
     if "considered_actions" in top_level:
         properties["considered_actions"] = {
             "type": "array",
@@ -241,7 +284,13 @@ def _envelope_schema(
         }
         required.append("considered_actions")
 
-    unknown = top_level - {"intents", "hypotheses", "considered_actions"}
+    unknown = top_level - {
+        "intents",
+        "hypotheses",
+        "considered_alternatives",
+        "coverage_declarations",
+        "considered_actions",
+    }
     if unknown:  # pragma: no cover - защита от молчаливого расширения
         raise ValueError(f"schema derivation: unexpected top-level keys {sorted(unknown)}")
     return {

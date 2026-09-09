@@ -50,9 +50,70 @@ WELL_VECTORS = {
     "wopt": "WOPT",
     "wwpt": "WWPT",
     "wwit": "WWIT",
+    # Давление призабойного блока ДО действия. Оно уже есть в сводке; без него
+    # запас до предела по забойному давлению нельзя перевести в суждение о
+    # производительности, потому что неизвестно, какой депрессией скважина
+    # добывает то, что добывает сейчас.
+    "block_pressure": "WBP9",
 }
 
-STATE_EXTRACTOR_VERSION = "aios.state.extractor/1.0.0"
+#: Векторы, отсутствие которых не является отказом извлечения: колода может их
+#: не писать. Тогда производные по ним остаются None, а не подменяются числом.
+OPTIONAL_WELL_VECTORS = frozenset({"block_pressure"})
+
+STATE_EXTRACTOR_VERSION = "aios.state.extractor/1.1.0"
+
+
+#: Ниже этой отработанной депрессии отношение запаса к ней не определяется.
+#: Порог явный: при депрессии, неотличимой от нуля, частное неограниченно
+#: растёт, и любое напечатанное число было бы артефактом деления, а не
+#: наблюдением. Величина в барах, как и сами давления.
+MIN_DRAWDOWN_FOR_RATIO_BAR = 1e-3
+
+#: Механика симулятора у предела по забойному давлению, записанная нейтрально.
+#: Утверждается только то, что система уже установила: команда сверх того, что
+#: скважина у своего предела способна отдать, не продавливает её ниже предела
+#: и сама по себе нарушением не является. Ни одно направление здесь не
+#: называется ни безопасным, ни желательным, ни ожидаемо работающим.
+FLOOR_PINNED_SEMANTICS: tuple[str, ...] = (
+    (
+        "A producer whose realized bottom-hole pressure sits at the official floor is "
+        "already delivering what that floor permits; a requested offtake above that "
+        "does not push it below the floor and is not by itself a constraint violation. "
+        "Realized production stays limited by the simulator in every case."
+    ),
+)
+
+
+def _drawdown(
+    *,
+    role: WellRole,
+    block_pressure: float | None,
+    bhp: float | None,
+    producer_bhp_margin: float | None,
+) -> tuple[float | None, float | None]:
+    """Отработанная депрессия и отношение запаса к ней. Только текущее состояние.
+
+    `drawdown_used = block_pressure - BHP` -- депрессия, которой скважина
+    добывает то, что добывает сейчас. `drawdown_spare_ratio =
+    producer_bhp_margin / drawdown_used` -- во сколько раз оставшийся до
+    официального предела запас больше уже отработанного.
+
+    Нулевое и почти нулевое поведение задано явно:
+
+    * запас ноль -> отношение 0.0. Это наблюдение "запаса нет";
+    * отработанная депрессия <= MIN_DRAWDOWN_FOR_RATIO_BAR -> None. Это
+      отсутствие наблюдения, а не ноль и не бесконечность;
+    * нет WBP9, нет BHP или скважина не добывающая -> обе величины None.
+
+    Ни одно значение не зависит от кандидата, прогона или оценки.
+    """
+    if role is not WellRole.PRODUCER or block_pressure is None or bhp is None:
+        return None, None
+    used = block_pressure - bhp
+    if producer_bhp_margin is None or used <= MIN_DRAWDOWN_FOR_RATIO_BAR:
+        return used, None
+    return used, producer_bhp_margin / used
 
 
 def source_summary_identity(summary: SummaryData) -> str:
@@ -246,6 +307,14 @@ class StateExtractor:
             raise StateExtractionError(f"well {well} vector {vector} unavailable")
         return summary.well_value(vector, well, step)
 
+    def _optional_well_value(
+        self, summary: SummaryData, well: str, logical_name: str, step: int
+    ) -> float | None:
+        vector = self.well_vectors.get(logical_name)
+        if vector is None or not summary.has_well_vector(vector, well):
+            return None
+        return summary.well_value(vector, well, step)
+
     def _well_states(
         self,
         summary: SummaryData,
@@ -278,6 +347,13 @@ class StateExtractor:
             wlpr_margin = (
                 wlpr_max - wlpr if role is WellRole.PRODUCER and wlpr_max is not None else None
             )
+            block_pressure = self._optional_well_value(summary, well, "block_pressure", step)
+            drawdown_used, drawdown_spare_ratio = _drawdown(
+                role=role,
+                block_pressure=block_pressure,
+                bhp=bhp,
+                producer_bhp_margin=producer_bhp_margin,
+            )
             states.append(
                 WellStateSnapshot(
                     well_id=well,
@@ -297,6 +373,9 @@ class StateExtractor:
                     producer_bhp_margin=producer_bhp_margin,
                     injector_bhp_margin=injector_bhp_margin,
                     wlpr_margin=wlpr_margin,
+                    block_pressure=block_pressure,
+                    drawdown_used=drawdown_used,
+                    drawdown_spare_ratio=drawdown_spare_ratio,
                 )
             )
         return tuple(states)
@@ -347,4 +426,5 @@ class StateExtractor:
             violations=tuple(violations),
             binding_constraints=tuple(binding),
             margins=margins,
+            semantics=FLOOR_PINNED_SEMANTICS,
         )

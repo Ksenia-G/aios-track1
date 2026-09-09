@@ -197,18 +197,20 @@ class InjectionProposal:
         return digest(self._semantic_payload())
 
 
-def _validate_injection_beam(
+def _validate_beam(
     *,
-    primary: InjectionProposal,
-    baseline: InjectionProposal,
-    alternatives: tuple[InjectionProposal, ...],
+    primary: ProductionProposal | InjectionProposal,
+    baseline: ProductionProposal | InjectionProposal,
+    alternatives: tuple[ProductionProposal, ...] | tuple[InjectionProposal, ...],
+    where: str,
 ) -> None:
     """Пучок обязан состоять из РАЗНЫХ структурных гипотез одного вызова.
 
     Повтор primary/baseline внутри alternatives не добавил бы поиску ни одной
-    новой гипотезы, зато занял бы слот физического бюджета.
+    новой гипотезы, зато занял бы слот физического бюджета. Правило одно на
+    оба пучка: у Production и Injection не может быть двух разных пониманий
+    того, что такое альтернативная гипотеза.
     """
-    where = "injection_agent_output.alternatives"
     seen = {primary.digest(), baseline.digest()}
     for index, alternative in enumerate(alternatives):
         if alternative.source is ProposalSource.DETERMINISTIC_BASELINE:
@@ -243,17 +245,70 @@ def _validate_agent_output(
 
 @dataclass(frozen=True, slots=True)
 class ProductionAgentOutput:
-    """Итог одного вызова Production-специалиста: primary + отдельный baseline."""
+    """Итог ОДНОГО вызова Production-специалиста: пучок гипотез + baseline.
+
+    Форма намеренно та же, что у `InjectionAgentOutput`: `alternatives` --
+    дополнительные СТРУКТУРНЫЕ гипотезы того же самого вызова провайдера, а не
+    отдельные обращения к модели. Одна гипотеза за эпоху означала, что
+    стохастический выбор действия мог на целую эпоху выключить исправно
+    работающую downstream-способность -- и на Production это наблюдалось:
+    единственная гипотеза T0 не содержала подъёма отбора вовсе, поэтому
+    численный слой не получал ни одного кандидата на подъём.
+
+    Ранг задаётся порядком: primary -- ранг 1, alternatives -- ранги 2..N.
+    Расширение аддитивное: пустой кортеж по умолчанию, и вызывающий, который
+    его не передаёт, ведёт себя ровно как раньше. Численных величин в этом
+    контракте нет и быть не может -- гипотезы структурные.
+    """
 
     primary_proposal: ProductionProposal
     baseline_proposal: ProductionProposal
+    alternatives: tuple[ProductionProposal, ...] = ()
+    considered_alternatives: tuple[ProductionProposal, ...] = ()
+
+    def hypotheses(self) -> tuple[ProductionProposal, ...]:
+        """РАНЖИРОВАННЫЕ гипотезы пучка. Ни baseline, ни рассмотренные сюда не входят.
+
+        Рассмотренные альтернативы намеренно не смешиваются с предпочтением:
+        специалист их оценил и НЕ рекомендует, и место в ранжировании было бы
+        ровно тем искажением, ради недопущения которого их и отделили.
+        """
+        return (self.primary_proposal, *self.alternatives)
+
+    def structural_alternatives(self) -> tuple[ProductionProposal, ...]:
+        """Всё, что специалист структурно авторизовал: ранжированное и рассмотренное."""
+        return (*self.hypotheses(), *self.considered_alternatives)
+
+    def ranked_hypotheses(self) -> tuple[tuple[int, ProductionProposal], ...]:
+        """Пары (ранг, гипотеза), ранг начинается с 1."""
+        return tuple(enumerate(self.hypotheses(), start=1))
 
     def __post_init__(self) -> None:
+        _validate_beam(
+            primary=self.primary_proposal,
+            baseline=self.baseline_proposal,
+            alternatives=self.alternatives,
+            where="production_agent_output.alternatives",
+        )
+        _validate_beam(
+            primary=self.primary_proposal,
+            baseline=self.baseline_proposal,
+            alternatives=self.considered_alternatives,
+            where="production_agent_output.considered_alternatives",
+        )
         _validate_agent_output(
             primary=self.primary_proposal,
             baseline=self.baseline_proposal,
             where="production_agent_output",
         )
+
+    def to_json(self) -> dict[str, JsonValue]:
+        return {
+            "primary_proposal": self.primary_proposal.to_json(),
+            "baseline_proposal": self.baseline_proposal.to_json(),
+            "alternatives": [item.to_json() for item in self.alternatives],
+            "considered_alternatives": [item.to_json() for item in self.considered_alternatives],
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,10 +342,11 @@ class InjectionAgentOutput:
         return tuple(enumerate(self.hypotheses(), start=1))
 
     def __post_init__(self) -> None:
-        _validate_injection_beam(
+        _validate_beam(
             primary=self.primary_proposal,
             baseline=self.baseline_proposal,
             alternatives=self.alternatives,
+            where="injection_agent_output.alternatives",
         )
         _validate_agent_output(
             primary=self.primary_proposal,

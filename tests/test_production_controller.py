@@ -60,8 +60,55 @@ class FakeProvider:
         return result
 
 
+def _declarations_for(envelope, preferred_action: str) -> list[dict[str, object]]:
+    """Ровно по одному заявлению на каждую требуемую ячейку ЭТОГО envelope.
+
+    Список требуемых ячеек берётся у того же валидатора, что проверяет ответ,
+    поэтому фикстура не может разойтись с контрактом. Ни одного размера фонда
+    здесь не записано.
+    """
+    from aios.mas.coverage import required_cells
+    from aios.mas.specialists.production.coverage import (
+        authorized_producers,
+        executable_actions,
+    )
+
+    cells = required_cells(
+        authorized=authorized_producers(envelope), executable=executable_actions(envelope)
+    )
+    return [
+        {
+            "action": str(cell.action),
+            "scope_class": str(cell.scope),
+            "disposition": "PREFERRED" if str(cell.action) == preferred_action else "DECLINED",
+            "decline_reason": "" if str(cell.action) == preferred_action else "NOT_GROUNDABLE",
+            "explanation": "fixture",
+        }
+        for cell in cells
+    ]
+
+
+def _declared(envelope, intents: list[dict[str, object]]) -> str:
+    """Ответ в форме контракта покрытия, собранный вокруг данных намерений."""
+    import json as _json
+
+    preferred = next(
+        (i["action"] for i in intents if i["action"] in ("INCREASE_OFFTAKE", "REDUCE_OFFTAKE")),
+        "",
+    )
+    return _json.dumps(
+        {
+            "hypotheses": [{"intents": intents}],
+            "considered_alternatives": [],
+            "coverage_declarations": _declarations_for(envelope, str(preferred)),
+            "considered_actions": [],
+        }
+    )
+
+
 def _response(
     *,
+    envelope=None,
     evidence_id: str = "SYN-pressure-1",
     action: str = "INCREASE_OFFTAKE",
     well_id: str = "SYN-P1",
@@ -78,8 +125,12 @@ def _response(
         "uncertainty": "MEDIUM",
         "rationale_short": rationale,
     }
+    intents = [intent, *(extra_intents or [])]
+    from tests.support.mas_team_fixtures import synthetic_production_envelope
+
+    resolved = envelope if envelope is not None else synthetic_production_envelope()
     return ProviderResponse(
-        text=json.dumps({"intents": [intent, *(extra_intents or [])]}),
+        text=_declared(resolved, intents),
         model_id="SYN-fake-production-model",
         source=ProposalSource.LLM_LOCAL,
         latency_ms=4,
@@ -176,19 +227,15 @@ def test_every_frozen_production_action_accepts_its_valid_shape(
     evidence_ids: list[str],
     rationale: str,
 ) -> None:
-    payload = {
-        "intents": [
-            {
-                "action": action,
-                "direction": direction,
-                "intensity": intensity,
-                "target_wells": target_wells,
-                "target_regions": target_regions,
-                "evidence_ids": evidence_ids,
-                "uncertainty": "LOW",
-                "rationale_short": rationale,
-            }
-        ]
+    intent = {
+        "action": action,
+        "direction": direction,
+        "intensity": intensity,
+        "target_wells": target_wells,
+        "target_regions": target_regions,
+        "evidence_ids": evidence_ids,
+        "uncertainty": "LOW",
+        "rationale_short": rationale,
     }
     production_action = ProductionAction(action)
     allowed_actions = (
@@ -198,7 +245,7 @@ def test_every_frozen_production_action_accepts_its_valid_shape(
     )
     envelope = synthetic_production_envelope(allowed_actions=allowed_actions)
     provider = FakeProvider(
-        ProviderResponse(text=json.dumps(payload), model_id="SYN-fake-production-model")
+        ProviderResponse(text=_declared(envelope, [intent]), model_id="SYN-fake-production-model")
     )
 
     output = ProductionController(llm_enabled=True, provider=provider).propose(envelope)
@@ -296,7 +343,7 @@ def test_prompt_documents_frozen_action_contracts() -> None:
 
 def test_parser_rejects_unknown_setpoint_field_atomically() -> None:
     payload = json.loads(_response().text)
-    payload["intents"][0]["lrat"] = 420
+    payload["hypotheses"][0]["intents"][0]["lrat"] = 420
     with pytest.raises(StrictOutputError, match="missing or unknown fields"):
         StrictOutputParser().parse(json.dumps(payload))
 
@@ -420,7 +467,7 @@ def test_non_producer_target_is_rejected() -> None:
 
 def test_unknown_or_prescriptive_target_region_is_rejected() -> None:
     payload = json.loads(_response().text)
-    payload["intents"][0]["target_regions"] = ["LRAT=420"]
+    payload["hypotheses"][0]["intents"][0]["target_regions"] = ["LRAT=420"]
     provider = FakeProvider(
         ProviderResponse(text=json.dumps(payload), model_id="SYN-fake-production-model")
     )
@@ -429,7 +476,7 @@ def test_unknown_or_prescriptive_target_region_is_rejected() -> None:
     )
     assert output.primary_proposal.provenance.fallback_reason == "vocabulary_failed"
 
-    payload["intents"][0]["target_regions"] = ["SYN-UNKNOWN-BLOCK"]
+    payload["hypotheses"][0]["intents"][0]["target_regions"] = ["SYN-UNKNOWN-BLOCK"]
     provider = FakeProvider(
         ProviderResponse(text=json.dumps(payload), model_id="SYN-fake-production-model")
     )

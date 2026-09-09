@@ -30,10 +30,18 @@ from aios.cases.contract import TRACK1_WLPR_HARD_MAX
 from aios.evaluation.canonical import digest
 from aios.mas.arbiter import ArbiterDecision, DecisionBundle
 from aios.mas.common import CandidateKind, Direction
+from aios.mas.coverage import ScopeClass, scope_class
 from aios.mas.envelopes import ArbiterEnvelope
 from aios.mas.intents import InjectionAction, InjectionIntent, ProductionAction, ProductionIntent
 from aios.mas.invariants import canonical_control_digest
 from aios.mas.magnitude import MagnitudeCandidate
+from aios.mas.magnitude_resolution.coverage import (
+    COVERAGE_RESERVE,
+    PREFERRED_RESERVE,
+    CoverageOrigin,
+    allocate_coverage,
+    coverage_funnel,
+)
 from aios.mas.magnitude_resolution.neighbourhood import (
     MAX_MULTI_INTENT_STEPS,
     expansion_plan,
@@ -80,6 +88,11 @@ class MagnitudeContext:
     baseline_injectors: tuple[InjectorControl, ...]
 
 
+def bundle_digest_of(bundle: DecisionBundle) -> str:
+    """Публичное имя того же дайджеста: телеметрия воронки называет источник."""
+    return _bundle_digest(bundle)
+
+
 def _bundle_digest(bundle: DecisionBundle) -> str:
     """DecisionBundle не выставляет собственный `.digest()` -- дайджест
     считается тем же canonical-инфраструктурой, что и везде в проекте."""
@@ -90,14 +103,18 @@ def _build_intent_lookup(
     envelope: ArbiterEnvelope,
 ) -> dict[str, ProductionIntent | InjectionIntent]:
     lookup: dict[str, ProductionIntent | InjectionIntent] = {}
+    # Всё, что специалист авторизовал: ранжированные гипотезы И рассмотренные
+    # альтернативы. Bundle, собранный Arbiter'ом вокруг любой из них, ссылается
+    # на её intents по дайджесту, и без них он не разрешается -- то есть
+    # admitted структура исчезала бы молча.
     for proposal in (
-        envelope.production_output.primary_proposal,
+        *envelope.production_output.structural_alternatives(),
         envelope.production_output.baseline_proposal,
     ):
         for intent in proposal.intents:
             lookup[intent.digest()] = intent
     for proposal in (
-        envelope.injection_output.primary_proposal,
+        *envelope.injection_output.hypotheses(),
         envelope.injection_output.baseline_proposal,
     ):
         for intent in proposal.intents:
@@ -157,6 +174,14 @@ class DeterministicMagnitudeResolver:
         self._profile = profile or ModelYEmpiricalMagnitudeProfile()
         self._resolver_version = f"{RESOLVER_VERSION}+{self._profile.version}"
         self._intent_lookup = _build_intent_lookup(context.arbiter_envelope)
+        #: Дайджесты предложений, которые специалист РАССМОТРЕЛ, но не
+        #: рекомендует. Их bundles идут по отдельному, узкому численному пути и
+        #: тратят отдельный резерв слотов.
+        self._coverage_proposal_digests = frozenset(
+            proposal.digest()
+            for proposal in context.arbiter_envelope.production_output.considered_alternatives
+        )
+        self._coverage_origins: dict[str, CoverageOrigin] = {}
         #: Диагностика последнего resolve(): сколько численных вариантов было
         #: построено, сколько осталось после дедупликации и сколько дошло до
         #: физики. Не влияет на решения -- только наблюдаемость воронки.
@@ -164,6 +189,7 @@ class DeterministicMagnitudeResolver:
 
     def resolve(self, decision: ArbiterDecision) -> tuple[MagnitudeCandidate, ...]:
         resolved: list[MagnitudeCandidate] = []
+        self._coverage_origins = {}
         for bundle in decision.bundles:
             try:
                 produced = self._resolve_bundle_candidates(bundle)
@@ -174,12 +200,32 @@ class DeterministicMagnitudeResolver:
             resolved.extend(produced)
         deduped = self._dedup_preserving_floor(resolved)
         final = self._apply_simulation_budget(deduped)
+        # Воронка по СТРУКТУРНЫМ источникам, а не только по числу кандидатов:
+        # без неё «гипотеза дошла до физики» и «гипотеза молча исчезла»
+        # выглядят в телеметрии одинаково.
+        admitted_origins = {
+            bundle_digest_of(bundle)
+            for bundle in decision.bundles
+            if bundle.kind is CandidateKind.AGENT_BUNDLE
+        }
+        resolved_origins = {
+            c.bundle_digest for c in resolved if c.candidate_kind is CandidateKind.AGENT_BUNDLE
+        }
+        evaluated_origins = {
+            c.bundle_digest for c in final if c.candidate_kind is CandidateKind.AGENT_BUNDLE
+        }
         self.last_funnel = {
             "virtual_candidates_generated": len(resolved),
             "unique_control_candidates": len(deduped),
             "physical_candidates_evaluated": len(final),
             "agent_finalists": sum(
                 1 for c in final if c.candidate_kind is CandidateKind.AGENT_BUNDLE
+            ),
+            "structural_origins_admitted": len(admitted_origins),
+            "structural_origins_resolved": len(resolved_origins),
+            "structural_origins_evaluated": len(evaluated_origins),
+            **coverage_funnel(
+                self._coverage_origins.values(), getattr(self, "_coverage_counts", {})
             ),
         }
         return final
@@ -200,18 +246,84 @@ class DeterministicMagnitudeResolver:
             if c.candidate_kind in (CandidateKind.HOLD, CandidateKind.DETERMINISTIC_BASELINE)
         ]
         agents = [c for c in candidates if c.candidate_kind is CandidateKind.AGENT_BUNDLE]
-        slots = max(budget - len(floor), 0)
-        # Слоты делятся между структурными гипотезами: кандидат помнит свой
-        # bundle_digest, и это и есть его источник.
+        preferred = [c for c in agents if c.bundle_digest not in self._coverage_origins]
+        coverage = [c for c in agents if c.bundle_digest in self._coverage_origins]
+
+        # Два раздельных резерва. Предпочтение получает ровно те слоты, что у
+        # него были до покрытия, и покрытие не может их занять; обратное тоже
+        # верно, а неиспользованные слоты покрытия сгорают.
+        available = max(budget - len(floor), 0)
+        preferred_slots = min(PREFERRED_RESERVE, available)
+        coverage_slots = min(COVERAGE_RESERVE, available - preferred_slots)
         allocated = allocate_by_origin(
-            [(candidate.bundle_digest, candidate) for candidate in agents], slots
+            [(candidate.bundle_digest, candidate) for candidate in preferred], preferred_slots
         )
-        return (*floor, *(candidate for _origin, candidate in allocated))
+        origins = tuple(self._coverage_origins.values())
+        counts = allocate_coverage(origins, coverage_slots)
+        taken: dict[str, int] = {}
+        covered: list[MagnitudeCandidate] = []
+        for candidate in coverage:
+            used = taken.get(candidate.bundle_digest, 0)
+            if used >= counts.get(candidate.bundle_digest, 0):
+                continue
+            taken[candidate.bundle_digest] = used + 1
+            covered.append(candidate)
+        self._coverage_counts = counts
+        return (*floor, *(candidate for _origin, candidate in allocated), *covered)
 
     def _resolve_bundle_candidates(self, bundle: DecisionBundle) -> tuple[MagnitudeCandidate, ...]:
-        if bundle.kind is CandidateKind.AGENT_BUNDLE:
-            return self._resolve_agent_bundle_neighbourhood(bundle)
-        return (self._resolve_bundle(bundle),)
+        if bundle.kind is not CandidateKind.AGENT_BUNDLE:
+            return (self._resolve_bundle(bundle),)
+        if bundle.production_proposal_digest in self._coverage_proposal_digests:
+            return self._resolve_coverage_bundle(bundle)
+        return self._resolve_agent_bundle_neighbourhood(bundle)
+
+    def _resolve_coverage_bundle(self, bundle: DecisionBundle) -> tuple[MagnitudeCandidate, ...]:
+        """Узкое численное представление рассмотренной альтернативы.
+
+        Действие, направление, качественная сила и цели приходят ИЗ НАМЕРЕНИЯ
+        специалиста и здесь не меняются: расширяется только величина, и только
+        внутри заявленного им потолка силы. Ни одна ступень выше потолка сюда
+        не попадает -- это была бы чужая гипотеза, усиленная за автора.
+        """
+        digests = bundle.production_intent_digests
+        if len(digests) != 1:
+            return ()
+        intent = self._intent_lookup.get(digests[0])
+        if intent is None or not isinstance(intent, ProductionIntent):
+            return ()
+        action = ProductionAction(intent.action)
+        if action not in (
+            ProductionAction.INCREASE_OFFTAKE,
+            ProductionAction.REDUCE_OFFTAKE,
+        ):
+            return ()
+        authorized = tuple(control.well for control in self._context.previous_producers)
+        scope = scope_class(intent.target_wells, authorized)
+        if scope is None:
+            return ()
+        origin = CoverageOrigin(
+            bundle_digest=_bundle_digest(bundle),
+            action=action,
+            scope=ScopeClass(scope),
+            authored_intensity=intent.intensity,
+        )
+        representatives = origin.representatives()
+        if not representatives:
+            return ()
+        self._coverage_origins[origin.bundle_digest] = origin
+        candidates: list[MagnitudeCandidate] = []
+        for factor in representatives:
+            try:
+                candidates.append(
+                    self._resolve_agent_bundle(
+                        bundle,
+                        production_override={digests[0]: (tuple(intent.target_wells), factor)},
+                    )
+                )
+            except MagnitudeResolutionError:
+                continue
+        return tuple(candidates)
 
     def _resolve_agent_bundle_neighbourhood(
         self, bundle: DecisionBundle

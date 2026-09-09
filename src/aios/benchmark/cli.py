@@ -211,7 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace-root", required=True)
     parser.add_argument("--output", default="benchmark-results")
     parser.add_argument("--reference-variant", default="B0_BASELINE")
-    parser.add_argument("--simulation-budget", type=int, default=8)
+    parser.add_argument("--simulation-budget", type=int, default=14)
     parser.add_argument("--decision-steps", type=int, default=1)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument(

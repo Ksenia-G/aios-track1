@@ -436,9 +436,45 @@ def test_a_live_model_cannot_add_a_numeric_control_field() -> None:
     assert output.primary_proposal.source is ProposalSource.DETERMINISTIC_FALLBACK
 
 
+def _declared_production(intents):
+    """Ответ Production в форме контракта покрытия для синтетического envelope."""
+    from aios.mas.coverage import required_cells
+    from aios.mas.specialists.production.coverage import (
+        authorized_producers,
+        executable_actions,
+    )
+    from tests.support.mas_team_fixtures import synthetic_production_envelope
+
+    envelope = synthetic_production_envelope()
+    preferred = next(
+        (i["action"] for i in intents if i["action"] in ("INCREASE_OFFTAKE", "REDUCE_OFFTAKE")),
+        "",
+    )
+    cells = required_cells(
+        authorized=authorized_producers(envelope), executable=executable_actions(envelope)
+    )
+    return json.dumps(
+        {
+            "hypotheses": [{"intents": intents}],
+            "considered_alternatives": [],
+            "coverage_declarations": [
+                {
+                    "action": str(cell.action),
+                    "scope_class": str(cell.scope),
+                    "disposition": "PREFERRED" if str(cell.action) == preferred else "DECLINED",
+                    "decline_reason": "" if str(cell.action) == preferred else "NOT_GROUNDABLE",
+                    "explanation": "fixture",
+                }
+                for cell in cells
+            ],
+            "considered_actions": [],
+        }
+    )
+
+
 def test_a_live_model_producing_valid_qualitative_output_is_accepted() -> None:
     """The gate refuses setpoints, not cognition."""
-    output = _controller_with(json.dumps({"intents": [_intent()]}))
+    output = _controller_with(_declared_production([_intent()]))
     assert output.primary_proposal.source is ProposalSource.LLM_LIVE
     intent = output.primary_proposal.intents[0]
     assert str(intent.action) == "INCREASE_OFFTAKE"
@@ -478,7 +514,9 @@ def test_production_schema_permits_only_the_parser_fields() -> None:
     from aios.mas.specialists.production.parser import _INTENT_KEYS
 
     schema = production_response_schema()
-    intent = schema["properties"]["intents"]["items"]
+    # KT3-PRODUCTION-BEAM-001: ответ несёт пучок гипотез, как у Injection;
+    # поля намерения при этом те же самые, новых не появляется.
+    intent = schema["properties"]["hypotheses"]["items"]["properties"]["intents"]["items"]
     assert set(intent["properties"]) == set(_INTENT_KEYS)
     assert intent["additionalProperties"] is False
     assert schema["additionalProperties"] is False
@@ -522,7 +560,9 @@ def test_schemas_encode_the_frozen_enums() -> None:
     from aios.mas.intents import ProductionAction
     from aios.mas.providers import production_response_schema
 
-    intent = production_response_schema()["properties"]["intents"]["items"]["properties"]
+    intent = production_response_schema()["properties"]["hypotheses"]["items"]["properties"][
+        "intents"
+    ]["items"]["properties"]
     assert intent["action"]["enum"] == [m.value for m in ProductionAction]
     assert intent["direction"]["enum"] == [m.value for m in Direction]
     assert intent["intensity"]["enum"] == [m.value for m in Intensity]
@@ -561,7 +601,7 @@ def test_anthropic_still_requests_max_tokens() -> None:
 def test_schema_request_serialises_the_openai_compatible_shape() -> None:
     from aios.mas.providers import production_response_schema
 
-    transport = _ScriptedTransport((200, _openai_body('{"intents": []}')))
+    transport = _ScriptedTransport((200, _openai_body('{"hypotheses": []}')))
     provider = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
     provider.complete("p", response_schema=production_response_schema())
 
@@ -569,7 +609,7 @@ def test_schema_request_serialises_the_openai_compatible_shape() -> None:
     fmt = payload["response_format"]
     assert fmt["type"] == "json_schema"
     assert fmt["json_schema"]["strict"] is True
-    assert fmt["json_schema"]["schema"]["properties"]["intents"]["type"] == "array"
+    assert fmt["json_schema"]["schema"]["properties"]["hypotheses"]["type"] == "array"
     assert payload["reasoning_effort"] == "low"
 
 
@@ -618,7 +658,7 @@ def _structured_production(text: str):
 
 
 def test_valid_structured_response_reaches_llm_live() -> None:
-    output = _structured_production(json.dumps({"intents": [_intent()]}))
+    output = _structured_production(_declared_production([_intent()]))
     assert output.primary_proposal.source is ProposalSource.LLM_LIVE
     assert str(output.primary_proposal.intents[0].action) == "INCREASE_OFFTAKE"
 
@@ -653,7 +693,7 @@ def test_structured_path_still_honours_the_bounded_503_retry() -> None:
     from aios.mas.specialists.production import ProductionController
 
     transport = _ScriptedTransport(
-        (503, b"{}"), (200, _openai_body(json.dumps({"intents": [_intent()]})))
+        (503, b"{}"), (200, _openai_body(_declared_production([_intent()])))
     )
     live = LiveTextCompletionProvider(config=_structured_config(), transport=transport)
     output = ProductionController(

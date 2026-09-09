@@ -58,6 +58,7 @@ class SpecialistAudit:
     primary: dict[str, JsonValue] | None = None
     baseline: dict[str, JsonValue] | None = None
     alternatives: tuple[dict[str, JsonValue], ...] = ()
+    considered_alternatives: tuple[dict[str, JsonValue], ...] = ()
     cited_evidence_ids: tuple[str, ...] = ()
 
     @classmethod
@@ -66,6 +67,10 @@ class SpecialistAudit:
         primary = output.primary_proposal  # type: ignore[attr-defined]
         baseline = getattr(output, "baseline_proposal", None)
         alternatives = tuple(getattr(output, "alternatives", ()) or ())
+        # Рассмотренная, но не рекомендованная альтернатива обязана быть видна:
+        # именно она делает читаемым случай "модель не предпочла направление,
+        # покрытие его проверило, экономика показала обратное".
+        considered = tuple(getattr(output, "considered_alternatives", ()) or ())
         return cls(
             proposal_source=str(primary.source),
             fallback_used=primary.provenance.fallback_used,
@@ -73,6 +78,7 @@ class SpecialistAudit:
             primary=primary.to_json(),
             baseline=None if baseline is None else baseline.to_json(),
             alternatives=tuple(item.to_json() for item in alternatives),
+            considered_alternatives=tuple(item.to_json() for item in considered),
             cited_evidence_ids=tuple(sorted(primary.grounding_report.grounded_evidence_ids)),
         )
 
@@ -84,6 +90,7 @@ class SpecialistAudit:
             "primary": self.primary,
             "baseline": self.baseline,
             "alternatives": list(self.alternatives),
+            "considered_alternatives": list(self.considered_alternatives),
             "cited_evidence_ids": list(self.cited_evidence_ids),
         }
 

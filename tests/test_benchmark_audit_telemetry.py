@@ -39,7 +39,13 @@ CANONICAL_EPOCHS = (T0, T1, T2)
 #: провенанс на него не влияет -- и именно это здесь и проверяется.
 PRE_CHANGE_CANDIDATE_ORDER = ("HOLD", "DETERMINISTIC_BASELINE", "AGENT_BUNDLE")
 PRE_CHANGE_HOLD_DIGEST = "b20bea87bd752f5b0b1853771e312a1eebd88b47a5e0b726eae9c983bc3a7dc1"
-PRE_CHANGE_NEXT_STATE_DIGEST = "bd83011d67e812b22eb24ebbadaa0629596b3a5bce1f7687b4717f6b26d66188"
+#: Re-based deliberately at KT3-FINAL-EVIDENCE-PATCH-001. The StateCard now
+#: carries pre-action deliverability evidence (WBP9, drawdown_used,
+#: drawdown_spare_ratio) and the floor-pinned constraint semantics, so its
+#: digest legitimately changed. What this test guards is unchanged and still
+#: holds: telemetry must not alter the realized trajectory. The old value was
+#: "bd83011d67e812b22eb24ebbadaa0629596b3a5bce1f7687b4717f6b26d66188".
+PRE_CHANGE_NEXT_STATE_DIGEST = "1a17b84a3951235870fefcff160af798cb403a32a867b0f29751b22c0b781dc9"
 
 
 class _StubResult:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aios.evaluation.canonical import digest
+from aios.mas.common import ProposalSource
 from aios.mas.envelopes import ProductionEnvelope
 from aios.mas.proposals import (
     ProductionAgentOutput,
@@ -15,6 +16,7 @@ from aios.mas.proposals import (
 
 from .baseline import BaselinePolicy
 from .compiler import ProposalCompiler
+from .coverage import evaluate_coverage, validate_declarations
 from .errors import (
     ProductionControllerError,
     ProposalCompilationError,
@@ -98,7 +100,7 @@ class ProductionController:
         attempt = _ProviderAttempt(attempt.prompt, response)
 
         try:
-            parsed = self.output_parser.parse(response.text)
+            parsed = self.output_parser.parse_beam(response.text)
         except StrictOutputError:
             # Новая попытка -- новая пара. Ответ первой попытки сюда не переносится.
             attempt = _ProviderAttempt(self.prompt_builder.build_schema_retry(envelope))
@@ -114,38 +116,132 @@ class ProductionController:
                 )
             attempt = _ProviderAttempt(attempt.prompt, retry_response)
             try:
-                parsed = self.output_parser.parse(retry_response.text)
+                parsed = self.output_parser.parse_beam(retry_response.text)
             except StrictOutputError:
                 return self._output_with_fallback(
                     envelope, baseline, reason="strict_schema_failed", attempt=attempt
                 )
             response = retry_response
 
-        try:
-            intents = self.vocabulary_validator.validate(parsed, envelope)
-            grounding_report = self.grounding_auditor.audit(intents, evidence)
-            primary = self.proposal_compiler.compile(
-                envelope=envelope,
-                source=response.source,
-                intents=intents,
-                grounding_report=grounding_report,
-                provenance=self._provenance(attempt),
-                audit=ProposalAudit(latency_ms=response.latency_ms),
-            )
-        except VocabularyValidationError:
+        provenance = self._provenance(attempt)
+        audit = ProposalAudit(
+            latency_ms=response.latency_ms,
+            declined_alternatives=tuple(
+                item.label() for item in parsed.considered if not item.supported
+            ),
+        )
+        seen: set[str] = set()
+        first_failure: str | None = None
+
+        def _compile_group(groups) -> list[ProductionProposal]:
+            nonlocal first_failure
+            out: list[ProductionProposal] = []
+            for intents in groups:
+                proposal, failure = self._compile_hypothesis(
+                    envelope, evidence, intents, response.source, provenance, audit
+                )
+                if proposal is None:
+                    first_failure = first_failure or failure
+                    continue
+                digest_ = proposal.digest()
+                if digest_ in seen:
+                    continue
+                seen.add(digest_)
+                out.append(proposal)
+            return out
+
+        compiled = _compile_group(parsed.hypotheses)
+        considered = _compile_group(parsed.considered_alternatives)
+        if not compiled:
             return self._output_with_fallback(
-                envelope, baseline, reason="vocabulary_failed", attempt=attempt
-            )
-        except ProposalCompilationError:
-            return self._output_with_fallback(
-                envelope, baseline, reason="grounding_failed", attempt=attempt
-            )
-        except ProductionControllerError:
-            return self._output_with_fallback(
-                envelope, baseline, reason="proposal_validation_failed", attempt=attempt
+                envelope, baseline, reason=first_failure or "vocabulary_failed", attempt=attempt
             )
 
-        return ProductionAgentOutput(primary_proposal=primary, baseline_proposal=baseline)
+        # Полнота структурного покрытия. Пробел здесь -- это не «почти
+        # валидный» ответ: допустимое направление осталось и не рассмотренным,
+        # и не отклонённым с причиной, поэтому утверждение о превосходстве
+        # противоположного не опровергнуто, а просто не проверялось. Закрыть
+        # пробел за модель детерминированный слой не имеет права.
+        preferred_intents = [i for p in compiled for i in p.intents]
+        considered_intents = [i for p in considered for i in p.intents]
+        _declarations, declaration_errors = validate_declarations(
+            envelope,
+            parsed_declarations=parsed.coverage_declarations,
+            preferred_intents=preferred_intents,
+            considered_intents=considered_intents,
+        )
+        if declaration_errors:
+            return self._output_with_fallback(
+                envelope,
+                baseline,
+                reason=f"coverage_declarations_invalid:{';'.join(declaration_errors)}"[:240],
+                attempt=attempt,
+            )
+        # Полнота доказана слоем заявлений: на каждую требуемую ячейку ровно
+        # одно заявление, и каждое сверено с реально написанной структурой или
+        # с тем, что система знает наверняка. Второй, независимый вывод
+        # полноты здесь только разошёлся бы с первым -- отчёт ниже остаётся
+        # наблюдаемостью, а не воротами.
+        coverage = evaluate_coverage(
+            envelope,
+            preferred_intents=preferred_intents,
+            considered_intents=considered_intents,
+            declared_reasons={
+                str(item.cell.action): str(item.decline_reason)
+                for item in _declarations
+                if item.decline_reason is not None
+            },
+        )
+        if coverage.gaps and not _declarations:
+            gaps = ",".join(gap.cell.key() for gap in coverage.gaps)
+            return self._output_with_fallback(
+                envelope,
+                baseline,
+                reason=f"structural_coverage_incomplete:{gaps}"[:240],
+                attempt=attempt,
+            )
+
+        return ProductionAgentOutput(
+            primary_proposal=compiled[0],
+            baseline_proposal=baseline,
+            alternatives=tuple(compiled[1:]),
+            considered_alternatives=tuple(considered),
+        )
+
+    def _compile_hypothesis(
+        self,
+        envelope: ProductionEnvelope,
+        evidence: object,
+        intents: tuple,
+        source: ProposalSource,
+        provenance: ProposalProvenance,
+        audit: ProposalAudit,
+    ) -> tuple[ProductionProposal | None, str | None]:
+        """Одна гипотеза пучка, либо None с причиной.
+
+        Каждая гипотеза проверяется НЕЗАВИСИМО: негодная альтернатива не имеет
+        права уносить с собой годных соседей -- ровно ради этого пучок и нужен.
+        """
+        try:
+            validated = self.vocabulary_validator.validate(intents, envelope)
+            grounding_report = self.grounding_auditor.audit(validated, evidence)
+            return (
+                self.proposal_compiler.compile(
+                    envelope=envelope,
+                    source=source,
+                    intents=validated,
+                    grounding_report=grounding_report,
+                    provenance=provenance,
+                    audit=audit,
+                ),
+                None,
+            )
+        except VocabularyValidationError:
+            return None, "vocabulary_failed"
+        except ProposalCompilationError:
+            return None, "grounding_failed"
+        except ProductionControllerError:
+            return None, "proposal_validation_failed"
 
     def _provenance(
         self, attempt: _ProviderAttempt, *, reason: str | None = None
