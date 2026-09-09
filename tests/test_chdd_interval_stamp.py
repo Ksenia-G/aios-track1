@@ -321,13 +321,12 @@ def test_official_calculator_is_the_version_we_are_reconciling_against() -> None
     )
 
 
-def test_the_authority_boundary_is_not_touched_by_this_change() -> None:
-    """S12: граница NO SETPOINTS CROSS и отбор кандидатов остаются как были."""
+def test_the_chdd_and_setpoint_authority_boundary_is_not_touched_by_this_change() -> None:
+    """S12: CHDD math and NO_SETPOINTS_CROSS authority stay unchanged."""
     assert (
         _porcelain(
             "src/aios/mas/specialists/authority.py",
-            "src/aios/mas/orchestration",
             "src/aios/chdd/runner.py",
         )
         == ""
-    ), "this milestone changes interval attribution only"
+    ), "this change may add post-simulation legality but must not change CHDD or setpoint authority"

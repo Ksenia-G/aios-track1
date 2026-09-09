@@ -20,6 +20,7 @@ from aios.mas.orchestration import (
     OpmChdd,
     OpmRealizedStateExtractor,
     OpmRunLocator,
+    OpmTrajectoryConstraintGuardian,
     RealizedStateAdvancer,
     build_real_closed_loop,
 )
@@ -117,6 +118,7 @@ def test_composition_binds_the_real_components(model_y_case, tmp_path) -> None:
     assert isinstance(composition.executor, SimulatorRuntimeExecutor)
     # Real legality, real economics, realized-state bridge and advancement.
     assert isinstance(composition.guardian, ConstraintGuardian)
+    assert isinstance(composition.trajectory_guardian, OpmTrajectoryConstraintGuardian)
     assert isinstance(composition.chdd, OpmChdd)
     assert isinstance(composition.realized_state_extractor, OpmRealizedStateExtractor)
     assert isinstance(composition.state_advancer, RealizedStateAdvancer)

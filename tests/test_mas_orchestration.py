@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 
 from aios.agents.constraint_guardian import ConstraintGuardian
+from aios.agents.trajectory_guardian import TrajectoryConstraintGuardian
 from aios.mas.arbiter import ArbiterDecision, DecisionBundle
 from aios.mas.common import CandidateKind, DecisionRound, ProposalSource
 from aios.mas.evidence import EvidenceArtifact
@@ -82,6 +83,13 @@ class StubInjectionAgent:
         if self._outputs:
             return self._outputs.pop(0)
         return synthetic_injection_agent_output()
+
+
+class FinalStateTrajectoryGuardian(TrajectoryConstraintGuardian):
+    """Test support boundary: a clean one-state trajectory unless a test overrides it."""
+
+    def evaluate(self, candidate: MagnitudeCandidate, execution: object, *, final_state) -> object:
+        return self.evaluate_states((final_state,), lineage_state_card_digest=final_state.digest())
 
 
 class StubArbiter:
@@ -214,6 +222,7 @@ def _orchestrator(**overrides: object) -> ClosedLoopOrchestrator:
         "candidate_executor": DeterministicCandidateExecutor(),
         "realized_state_extractor": extractor,
         "guardian": ConstraintGuardian(),
+        "trajectory_guardian": FinalStateTrajectoryGuardian(),
         "chdd": DeterministicCHDD(),
         "state_advancer": CommittedControlsStateAdvancer(extractor=extractor),
     }
@@ -228,7 +237,14 @@ def _orchestrator(**overrides: object) -> ClosedLoopOrchestrator:
 
 @pytest.mark.parametrize(
     "missing",
-    ["candidate_executor", "realized_state_extractor", "guardian", "chdd", "state_advancer"],
+    [
+        "candidate_executor",
+        "realized_state_extractor",
+        "guardian",
+        "trajectory_guardian",
+        "chdd",
+        "state_advancer",
+    ],
 )
 def test_missing_authoritative_dependency_fails_closed(missing: str) -> None:
     """A caller who forgets physics, legality or economics gets an error.
@@ -323,6 +339,66 @@ def test_guardian_failed_candidate_is_never_committed() -> None:
     assert result.committed_candidate_digest != agent.candidate_digest
     # An illegal candidate is never economically scored at all.
     assert agent.npv_mln_rub is None
+
+
+def test_trajectory_guardian_failed_candidate_keeps_npv_but_cannot_be_committed() -> None:
+    """A candidate that is good economically but fails mid-horizon legality is ineligible.
+
+    The final StateCard Guardian passes this candidate; only the trajectory-wide
+    Guardian sees the interior violation. CHDD still runs so the audit can show
+    the rejected NPV, but economic selection must choose another candidate.
+    """
+    from aios.agents.trajectory_guardian import TrajectoryConstraintGuardian
+
+    class AgentOnlyFailingTrajectoryGuardian(TrajectoryConstraintGuardian):
+        def evaluate(
+            self, candidate: MagnitudeCandidate, execution: object, *, final_state
+        ) -> object:
+            if candidate.candidate_kind is not CandidateKind.AGENT_BUNDLE:
+                return self.evaluate_states(
+                    (final_state,), lineage_state_card_digest=final_state.digest()
+                )
+            bad_wells = tuple(
+                replace(well, bhp=45.0) if well.well_id == "SYN-P1" else well
+                for well in final_state.wells
+            )
+            bad = replace(
+                final_state,
+                metadata=replace(final_state.metadata, date=datetime.date(2020, 5, 1)),
+                wells=bad_wells,
+            )
+            return self.evaluate_states(
+                (final_state, bad), lineage_state_card_digest=final_state.digest()
+            )
+
+    resolver = StubMagnitudeResolver(agent_controls=(200.0, 150.0))
+    decision = StubArbiter().decide(_ArbiterEnvelopeStub())
+    values = {candidate.digest(): 1.0 for candidate in resolver.resolve(decision)}
+    agent_digest = next(
+        candidate.digest()
+        for candidate in resolver.resolve(decision)
+        if candidate.candidate_kind is CandidateKind.AGENT_BUNDLE
+    )
+    values[agent_digest] = 999.0
+
+    orchestrator = _orchestrator(
+        magnitude_resolver=resolver,
+        trajectory_guardian=AgentOnlyFailingTrajectoryGuardian(),
+        chdd=ScriptedCHDD(values=values),
+    )
+    result = orchestrator.run_decision_step(_step_input())
+
+    agent = next(record for record in result.candidates if record.candidate_digest == agent_digest)
+    assert agent.guardian is not None
+    assert agent.guardian.passed is False
+    assert agent.npv_mln_rub == pytest.approx(999.0)
+    assert agent.ineligibility_reason == "GUARDIAN_FAILED"
+    assert result.committed_candidate_digest != agent_digest
+    assert result.selection.selected.candidate_identity != agent_digest
+    assert any(
+        rejection.candidate_identity == agent_digest and str(rejection.reason) == "GUARDIAN_FAILED"
+        for rejection in result.selection.rejected
+    )
 
 
 def test_failed_simulation_cannot_become_a_pass() -> None:

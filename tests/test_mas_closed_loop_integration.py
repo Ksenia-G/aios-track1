@@ -14,6 +14,7 @@ import json
 import pytest
 
 from aios.agents.constraint_guardian import ConstraintGuardian
+from aios.agents.trajectory_guardian import TrajectoryConstraintGuardian
 from aios.diagnostics import PressureDiagnostic, SweepDiagnostic
 from aios.mas.arbiter import ArbiterDecision, DecisionBundle
 from aios.mas.common import CandidateKind, DecisionRound, ProposalSource
@@ -48,6 +49,13 @@ from tests.support.orchestration_doubles import (
 
 EFFECTIVE_DATE = datetime.date(2020, 4, 1)
 RESOLVER_VERSION = "tests.integration.closed_loop/1.0.0"
+
+
+class FinalStateTrajectoryGuardian(TrajectoryConstraintGuardian):
+    """Test support boundary: clean one-state trajectory unless overridden."""
+
+    def evaluate(self, candidate: MagnitudeCandidate, execution: object, *, final_state) -> object:
+        return self.evaluate_states((final_state,), lineage_state_card_digest=final_state.digest())
 
 
 class RecordingArbiter:
@@ -183,6 +191,7 @@ def _orchestrator(*, llm_enabled: bool = False, **overrides: object) -> ClosedLo
         "candidate_executor": DeterministicCandidateExecutor(),
         "realized_state_extractor": extractor,
         "guardian": ConstraintGuardian(),
+        "trajectory_guardian": FinalStateTrajectoryGuardian(),
         "chdd": DeterministicCHDD(),
         "state_advancer": CommittedControlsStateAdvancer(extractor=extractor),
     }

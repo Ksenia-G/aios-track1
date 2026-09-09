@@ -168,15 +168,14 @@ def test_a16_frozen_contract_files_unmodified() -> None:
     assert result.stdout.strip() == "", f"frozen contract files touched: {result.stdout}"
 
 
-# Team-zone isolation (section 42).
-def test_does_not_touch_team_specialist_or_orchestration_zones() -> None:
+# Specialist-zone isolation.
+def test_does_not_touch_specialist_zones() -> None:
     import subprocess
 
     repo_root = Path(__file__).resolve().parents[1]
     team_zones = [
         "src/aios/mas/specialists/injection",
         "src/aios/mas/specialists/production",
-        "src/aios/mas/orchestration",
     ]
     result = subprocess.run(
         ["git", "status", "--porcelain", *team_zones],

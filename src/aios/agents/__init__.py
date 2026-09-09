@@ -23,11 +23,19 @@ from aios.agents.sweep_agent import (
     SweepProposal,
     SweepProposalReason,
 )
+from aios.agents.trajectory_guardian import (
+    TRAJECTORY_GUARDIAN_VERSION,
+    TrajectoryConstraintGuardian,
+    TrajectoryConstraintReport,
+    TrajectoryConstraintSummary,
+    TrajectoryConstraintViolation,
+)
 
 __all__ = [
     "CONSTRAINT_GUARDIAN_VERSION",
     "PRESSURE_AGENT_VERSION",
     "SWEEP_AGENT_VERSION",
+    "TRAJECTORY_GUARDIAN_VERSION",
     "ConstraintCheck",
     "ConstraintEvaluationError",
     "ConstraintGuardian",
@@ -42,4 +50,8 @@ __all__ = [
     "SweepAgentError",
     "SweepProposal",
     "SweepProposalReason",
+    "TrajectoryConstraintGuardian",
+    "TrajectoryConstraintReport",
+    "TrajectoryConstraintSummary",
+    "TrajectoryConstraintViolation",
 ]

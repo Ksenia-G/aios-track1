@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from aios.agents.trajectory_guardian import TrajectoryConstraintGuardian, TrajectoryConstraintReport
 from aios.cases.contract import Case
 from aios.chdd.runner import run_chdd
 from aios.chdd.trajectory import build_chdd_input, write_chdd_csv
@@ -171,6 +172,70 @@ def report_step_for(summary, moment: date | None) -> int:
 
 
 @dataclass(frozen=True, slots=True)
+class OpmTrajectoryConstraintGuardian:
+    """Trajectory-wide legality from the same OPM summary consumed by CHDD.
+
+    The gate consumes an already-produced candidate execution. It does not run
+    OPM, does not change CHDD input, and does not feed any future report values
+    to specialists.
+    """
+
+    case: Case
+    locator: OpmRunLocator
+    initial_state: FieldState
+    baseline: Schedule
+    geology: GeologyContext | None = None
+    extractor: StateExtractor = None  # type: ignore[assignment]
+    schedule_provider: object | None = None
+    guardian: TrajectoryConstraintGuardian = None  # type: ignore[assignment]
+
+    def evaluate(
+        self,
+        candidate: MagnitudeCandidate,
+        execution: RuntimeExecution,
+        *,
+        final_state: StateCard,
+    ) -> TrajectoryConstraintReport:
+        run_label = execution.provenance.candidate_digest
+        summary = self.locator.read_summary(run_label, self.case.history.data_path.stem)
+        schedule = self.baseline
+        if self.schedule_provider is not None:
+            schedule = self.schedule_provider(candidate).schedule
+        extractor = self.extractor if self.extractor is not None else StateExtractor()
+        states: list[StateCard] = []
+        for index, stamp in enumerate(summary.dates):
+            report_date = stamp.date()
+            if not self.case.management_start_date <= report_date <= self.case.management_end_date:
+                continue
+            controls = well_controls_from_schedule(
+                self.initial_state,
+                schedule,
+                at_date=report_date,
+            )
+            states.append(
+                extractor.extract(
+                    summary=summary,
+                    case=self.case,
+                    run_id=state_run_id(
+                        case_id=self.case.case_id,
+                        schedule_hash=execution.provenance.schedule_sha256,
+                        simulator_digest=execution.provenance.simulation_key,
+                    ),
+                    simulator_digest=execution.provenance.simulation_key,
+                    schedule_hash=execution.provenance.schedule_sha256,
+                    well_controls=controls,
+                    geology=self.geology,
+                    step=index,
+                )
+            )
+        guardian = self.guardian if self.guardian is not None else TrajectoryConstraintGuardian()
+        return guardian.evaluate_states(
+            tuple(states),
+            lineage_state_card_digest=final_state.digest(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class OpmChdd:
     """Авторитетный ЧДД по траектории настоящего прогона.
 
@@ -224,6 +289,7 @@ class RealClosedLoopComposition:
     executor: object
     realized_state_extractor: OpmRealizedStateExtractor
     guardian: object
+    trajectory_guardian: object
     chdd: OpmChdd
     state_advancer: RealizedStateAdvancer
     locator: OpmRunLocator
@@ -234,6 +300,7 @@ class RealClosedLoopComposition:
             "candidate_executor": self.executor,
             "realized_state_extractor": self.realized_state_extractor,
             "guardian": self.guardian,
+            "trajectory_guardian": self.trajectory_guardian,
             "chdd": self.chdd,
             "state_advancer": self.state_advancer,
         }
@@ -306,11 +373,20 @@ def build_real_closed_loop(
         decision_epochs=tuple(decision_epochs),
         schedule_provider=runtime.compile,
     )
+    trajectory_guardian = OpmTrajectoryConstraintGuardian(
+        case=case,
+        locator=locator,
+        initial_state=initial_state,
+        baseline=baseline,
+        geology=geology,
+        schedule_provider=runtime.compile,
+    )
     return RealClosedLoopComposition(
         runtime=runtime,
         executor=executor,
         realized_state_extractor=realized,
         guardian=guardian if guardian is not None else ConstraintGuardian(),
+        trajectory_guardian=trajectory_guardian,
         chdd=OpmChdd(case=case, locator=locator),
         state_advancer=RealizedStateAdvancer(realized_state_extractor=realized),
         locator=locator,
@@ -322,6 +398,7 @@ __all__ = [
     "OpmChdd",
     "OpmRealizedStateExtractor",
     "OpmRunLocator",
+    "OpmTrajectoryConstraintGuardian",
     "RealClosedLoopComposition",
     "RealizedStateAdvancer",
     "build_real_closed_loop",

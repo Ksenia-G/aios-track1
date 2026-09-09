@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from aios.agents.constraint_guardian import FAIL, ConstraintReport
+from aios.agents.trajectory_guardian import TrajectoryConstraintReport
 from aios.chdd.runner import ChddResult
 from aios.evaluation.canonical import JsonValue
 from aios.execution import (
@@ -124,6 +125,19 @@ class ChddEvaluation:
     def __post_init__(self) -> None:
         if not self.input_digest:
             raise BoundaryError("chdd_evaluation.input_digest: must be non-empty")
+
+
+@runtime_checkable
+class TrajectoryConstraintGuardianLike(Protocol):
+    """Post-simulation trajectory-wide legality gate for candidate eligibility."""
+
+    def evaluate(
+        self,
+        candidate: MagnitudeCandidate,
+        execution: RuntimeExecution,
+        *,
+        final_state: StateCard,
+    ) -> TrajectoryConstraintReport: ...
 
 
 @runtime_checkable
@@ -243,6 +257,7 @@ __all__ = [
     "RealizedStateExtractor",
     "SimulatorRuntimeExecutor",
     "StateAdvancer",
+    "TrajectoryConstraintGuardianLike",
     "identity_pre_action_validator",
     "never_conflict",
 ]

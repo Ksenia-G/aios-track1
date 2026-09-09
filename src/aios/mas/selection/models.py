@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from aios.agents.constraint_guardian import ConstraintReport
+from aios.agents.trajectory_guardian import TrajectoryConstraintReport
 from aios.chdd import ChddResult
 from aios.evaluation.canonical import JsonValue, digest
 from aios.evaluation.simulation import SimulationResult
@@ -164,7 +165,7 @@ class GuardianOutcome:
 
     candidate_identity: str
     simulation_result_digest: str
-    report: ConstraintReport
+    report: ConstraintReport | TrajectoryConstraintReport
     execution: VerifiedExecution | None = None
     state_card_digest: str | None = None
 
@@ -173,7 +174,9 @@ class GuardianOutcome:
         _require_text(self.simulation_result_digest, "guardian_outcome.simulation_result_digest")
 
     @classmethod
-    def verified(cls, realized: VerifiedRealizedState, report: ConstraintReport) -> GuardianOutcome:
+    def verified(
+        cls, realized: VerifiedRealizedState, report: ConstraintReport | TrajectoryConstraintReport
+    ) -> GuardianOutcome:
         """Build from the realized state this verdict was actually computed on.
 
         The report has to name that state itself. Supplying a run root beside

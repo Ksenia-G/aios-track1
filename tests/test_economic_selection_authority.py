@@ -485,15 +485,14 @@ def test_chdd_still_delegates_every_number_to_the_official_calculator() -> None:
     assert "compute_calculation" in _called_names(tree)
 
 
-# Team-zone isolation (section 36).
-def test_does_not_touch_team_or_orchestration_zones() -> None:
+# Specialist-zone isolation.
+def test_does_not_touch_specialist_zones() -> None:
     import subprocess
 
     repo_root = Path(__file__).resolve().parents[1]
     team_zones = [
         "src/aios/mas/specialists/injection",
         "src/aios/mas/specialists/production",
-        "src/aios/mas/orchestration",
     ]
     result = subprocess.run(
         ["git", "status", "--porcelain", *team_zones],

@@ -74,6 +74,7 @@ from aios.mas.orchestration.boundaries import (
     RealizedConstraintGuardian,
     RealizedStateExtractor,
     StateAdvancer,
+    TrajectoryConstraintGuardianLike,
     identity_pre_action_validator,
     never_conflict,
 )
@@ -463,6 +464,7 @@ class ClosedLoopOrchestrator:
         candidate_executor: CandidateExecutor,
         realized_state_extractor: RealizedStateExtractor,
         guardian: RealizedConstraintGuardian,
+        trajectory_guardian: TrajectoryConstraintGuardianLike,
         chdd: CHDD,
         state_advancer: StateAdvancer,
         conflict_predicate: ConflictPredicate = never_conflict,
@@ -491,6 +493,7 @@ class ClosedLoopOrchestrator:
             "realized_state_extractor", realized_state_extractor
         )
         self._guardian = _require_dependency("guardian", guardian)
+        self._trajectory_guardian = _require_dependency("trajectory_guardian", trajectory_guardian)
         self._chdd = _require_dependency("chdd", chdd)
         self._state_advancer = _require_dependency("state_advancer", state_advancer)
         self._conflict_predicate = conflict_predicate
@@ -870,15 +873,20 @@ class ClosedLoopOrchestrator:
                 # и связывается: настоящий вердикт о другом кандидате назовёт
                 # другую карту и сюда не пройдёт.
                 realized_root = VerifiedRealizedState.of(verified, realized)
-                report = self._guardian.evaluate(realized)
-                guardian_outcome = GuardianOutcome.verified(realized_root, report)
-                guardian_verdicts[candidate_digest] = GuardianVerdict.from_report(report)
-                if report.summary.failed == 0:
+                point_report = self._guardian.evaluate(realized)
+                if point_report.summary.failed == 0:
+                    report = self._trajectory_guardian.evaluate(
+                        candidate, execution, final_state=realized
+                    )
                     evaluation = self._chdd.evaluate(candidate, execution)
                     chdd_outcome = ChddOutcome.verified(
                         VerifiedChddInput(execution=verified, input_digest=evaluation.input_digest),
                         evaluation.result,
                     )
+                else:
+                    report = point_report
+                guardian_outcome = GuardianOutcome.verified(realized_root, report)
+                guardian_verdicts[candidate_digest] = GuardianVerdict.from_report(report)
             else:
                 guardian_verdicts[candidate_digest] = GuardianVerdict(
                     passed=False,
@@ -906,9 +914,9 @@ class ClosedLoopOrchestrator:
         rejected_reasons = {
             rejection.candidate_identity: str(rejection.reason) for rejection in selection.rejected
         }
-        eligible_npv = {
+        audited_npv = {
             evaluation.candidate_identity: evaluation.chdd.result.npv_mln_rub
-            for evaluation in selection.eligible
+            for evaluation in evaluations
             if evaluation.chdd is not None
         }
 
@@ -918,7 +926,7 @@ class ClosedLoopOrchestrator:
                 candidate_kind=str(candidate.candidate_kind),
                 simulation_status=str(execution.result.status),
                 guardian=guardian_verdicts.get(digest_),
-                npv_mln_rub=eligible_npv.get(digest_),
+                npv_mln_rub=audited_npv.get(digest_),
                 ineligibility_reason=rejected_reasons.get(digest_),
             )
             for digest_, (candidate, execution) in executed.items()
