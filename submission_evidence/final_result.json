@@ -1,0 +1,41 @@
+{
+  "schema": "aios.kt3.final_result/1.0.0",
+  "status": "frozen",
+  "case_id": "model_y_validation",
+  "management_window": {
+    "start": "2014-01-01",
+    "end": "2015-12-01"
+  },
+  "organizer_compatible_mln_rub": {
+    "note": "reproduced normalized comparison, not an organizer ranking result",
+    "B0_BASELINE": 5326.453496,
+    "B3_MAS_OFF": 5325.046561,
+    "B4_MAS_ON": 5412.255034450385,
+    "delta_MAS_ON_vs_MAS_OFF": 87.208474
+  },
+  "ai_period_objective_mln_rub": {
+    "note": "CHDD objective over the AI-controlled window only; a different scale",
+    "B4_MAS_ON": 1249.4366799710856
+  },
+  "committed_candidate_digest": "9ec365f98c0544ac7c345d7e50123fa6c95d75d86f39fcb1de71fdb623124c33",
+  "guardian": {
+    "committed_checks": 5904,
+    "committed_failures": 0
+  },
+  "schedule": {
+    "standalone_file": "wells_schedule.inc",
+    "standalone_sha256": "240dcdb1e94598b0269c307499abc355fb6cc2581d4b93a4e4f680ebba35bf0c",
+    "standalone_bytes": 52437,
+    "dates_records_total": 103,
+    "history_dates_records": 79,
+    "management_dates_records": 24,
+    "management_window_sha256": "6e95f8dc825d3f16ebbdb12ecfe5c73e85e205445f6930de0852fce2b8ee7dbe",
+    "management_window_bytes": 8238
+  },
+  "decision_epochs": [
+    "2014-01-01",
+    "2014-09-01",
+    "2015-04-01"
+  ],
+  "decision_epoch_note": "two of three epochs ran on the live model; the last closed on the deterministic floor after a provider error"
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "aios.kt3.reproducibility/1.0.0",
+  "value_run_code_sha": "3582a40be670f4c09ea81b4734903c142d3c2c0d",
+  "release_base_sha": "a46078976a95d3c1021a398d6f146857161cc934",
+  "release_note": "the frozen value run was produced on value_run_code_sha; later KT3 release commits were runtime, documentation and acceptance-reference housekeeping and did not alter the committed schedule",
+  "committed_candidate_digest": "9ec365f98c0544ac7c345d7e50123fa6c95d75d86f39fcb1de71fdb623124c33",
+  "simulator_image": "openporousmedia/opmreleases@sha256:18c497f6a918c160cd290081d4163abf6e2c349797e18e3b5669c9095044adff",
+  "case_digest": "ab9e7dba89264ecd795cf3bcaf9214ce07f25ba485a83ec8ac51a4b52e5541a4",
+  "initial_state_digest": "ab185be63ce3d68233e235f4c24a8ff6d51d9a6e067b9b509da9128850e814c1",
+  "manifest_digest": "a7b77abf5e34ebf823edc2f6c1b69ee17123b1b04ccebc703ace7e360d4dc995",
+  "selection_rule": "economic_argmax_chdd_v1",
+  "standalone_schedule_sha256": "240dcdb1e94598b0269c307499abc355fb6cc2581d4b93a4e4f680ebba35bf0c",
+  "management_window_sha256": "6e95f8dc825d3f16ebbdb12ecfe5c73e85e205445f6930de0852fce2b8ee7dbe",
+  "chdd_input_digests_by_epoch": [
+    "f0aa5136ad7c22732a2ecf94fe20332b4d3bd05b36327d5666f86e41bc6d27e3",
+    "45ec3c5ba4bce650b41756e1d9c32d702a1dc8cf88594d318daee6449fff5400",
+    "075812d38d582d5851f3ced02a158353716e77988f729692d9e0243977d2ad75"
+  ]
+}

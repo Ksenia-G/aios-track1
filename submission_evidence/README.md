@@ -1,97 +1,56 @@
-> **SUPERSEDED.** Этот пакет фиксирует прогон `PERF-004-CAUSAL-CLEAN-001`
-> (код `205ad86`, MAS ON 5342.722480331016 млн ₽). Он остаётся верным как
-> архив того прогона и **не** описывает текущую систему. Действующий
-> замороженный результат — `KT3-FINAL-EVIDENCE-PATCH-001` (код `3582a40`,
-> MAS ON 5412.255034 млн ₽, +87.208 над MAS OFF); см. README репозитория.
+# KT3 Final Submission Evidence
 
-# Submission evidence — PERF-004-CAUSAL-CLEAN-001
+Замороженный итоговый артефакт KT3 и компактный провенанс финального прогона MAS.
 
-Auditable package for the accepted Model Y economic measurement.
+## Каноническое расписание для организаторов
 
-Its organising rule: **measurement-time evidence and post-measurement
-observability work are never mixed.** Everything produced by the run carries
-code SHA `205ad86`. The audit telemetry added afterwards carries `83cdd43` and
-did not exist when the numbers were produced.
+```
+wells_schedule.inc
+SHA-256  240dcdb1e94598b0269c307499abc355fb6cc2581d4b93a4e4f680ebba35bf0c
+52 437 байт · 103 записи DATES
+```
 
-## The claim
+Это **самодостаточный** файл расписания, загружаемый без ручной коррекции:
 
-> The MAS system generated structural operating hypotheses with GPT-5.6 Sol
-> while deterministic components retained numerical control authority. In the
-> frozen three-decision Model Y benchmark, MAS improved organizer-compatible
-> NPV from 5325.05 to 5342.72 mln RUB (+17.68 mln RUB, +0.332%) versus the
-> deterministic ablation. The committed improvement appeared at the final
-> decision epoch as a Guardian-valid, conserved redistribution of injection,
-> increasing simulated oil production while reducing cumulative water
-> injection.
+- неизменные исторические управления по 2013-12 включительно (79 записей `DATES`,
+  байт в байт из исходной колоды);
+- закоммиченная политика MAS на окне управления 2014-01 .. 2015-12
+  (24 записи `DATES`).
 
-| | END-stamp objective @2014 | organizer-compatible NPV |
-|---|---:|---:|
-| MAS OFF (`B3_MAS_OFF`) | 1079.492035705738 | 5325.0465605957925 |
-| MAS ON (`B4_MAS_ON`) | 1113.9374027519964 | 5342.722480331016 |
-| **delta** | **+34.4453670462583** | **+17.675919735223943** |
+Отдельно взятая часть окна управления имеет собственную сумму:
 
-+0.3319% versus MAS OFF; +0.3054% versus the published official baseline of
-5326.453465501771 mln RUB. Verdict `PERF_004_CAUSAL_CLEAN_GAIN`; comparison
-class `DIRECT_COMPARABLE`.
+```
+SHA-256  6e95f8dc825d3f16ebbdb12ecfe5c73e85e205445f6930de0852fce2b8ee7dbe
+```
 
-Organizer-compatible totals are composed as
-`4771.096458908001 + 0.5131581182307065 × END_STAMP_FORECAST_OBJECTIVE_2014`,
-never from our own 2007-origin trajectory.
+Она отличается от суммы файла выше именно потому, что итоговый артефакт
+дополнительно содержит неизменный исторический префикс. Обе величины приведены,
+чтобы их нельзя было перепутать.
 
-## Mechanism, in one paragraph
+## Финальный воспроизведённый результат
 
-The two committed trajectories are identical through T0 and T1 and diverge only
-after T2 (2015-04-01), where the committed deck redistributes injection across
-9 of 16 injectors with the **commanded total exactly conserved**
-(3060.00 → 3060.00 SM³/day, conservation error 0.0000000000): five donors give
-up 866.25, four recipients take 866.25. Recipients then meet the 300 bar
-injector BHP cap, so *realized* injection falls while commanded total does not.
-Over the window MAS ON produced **+8945.625 SM³ more oil** while injecting
-**54539.5 SM³ less water**. Producer BHP floor (50.00 bar) and injector BHP cap
-(300.00 bar) are identical in both variants — no constraint was relaxed.
-
-## Files
-
-| file | contents |
+| вариант | сопоставимый ЧДД, млн ₽ |
 |---|---|
-| `perf_004_measurement.json` | canonical machine-readable economic record |
-| `physics_summary.json` | cumulative volumes, divergence point, T2 redistribution, conservation |
-| `guardian_summary.json` | committed-trajectory vs search-wide Guardian evidence, search funnel |
-| `perf_004_errata.md` | the two historical artifact limitations, and their post-run fixes |
-| `lineage.md` | commit lineage with an explicit measurement boundary |
-| `reproducibility.md` | provider, experiment, decision grid, frame, caveats |
-| `frozen_artifacts/` | the unmodified run outputs the package is derived from |
-| `checksums.sha256` | SHA-256 for every file above |
+| MAS OFF | 5325.046561 |
+| MAS ON | **5412.255034** |
+| **прирост** | **+87.208474** |
 
-`frozen_artifacts/` holds `benchmark_summary.json` exactly as the run wrote it,
-plus the two committed schedule decks. They were scanned for credentials,
-machine-local paths, transcripts and scratchpads before inclusion. Nothing in
-this package was regenerated, backfilled or edited.
+Guardian закоммиченной политики: **5904 проверки, 0 нарушений**.
 
-## Known limitations — read before citing
+Целевая функция на управляемом окне (другая шкала, не смешивать с таблицей
+выше): MAS ON **1249.4366799710856** млн ₽.
 
-1. **The frozen artifact is not self-auditing per epoch.** Per-epoch StateCard
-   dates, diagnostic evidence identities and specialist beams were not
-   persisted at `205ad86`. Causality is supported by the decision dates visible
-   in the funnel and the committed deck, by repository tests at that SHA, and
-   by reconstruction — not by direct fields. Fixed after the run at `83cdd43`.
-2. **MAS OFF `fallback_count` reads 3 and should read 6.** A metadata
-   under-count in the ablation's Injection provenance, not a behavioural
-   difference. MAS ON's `0` is unaffected and still means no fallback occurred.
+Приведённые значения — **наш собственный воспроизведённый нормализованный
+результат**, а не итог ранжирования организаторами.
 
-Both are documented in `perf_004_errata.md`.
+Из трёх эпох решения две прошли живой моделью; последняя закрылась
+детерминированным полом после ошибки провайдера.
 
-## What this evidence does not claim
+## Состав пакета
 
-- not a global optimum, and not a search over the policy space;
-- no statistical significance — one run, one repeat, no dispersion measured;
-- no repeated-run robustness;
-- no identity with official tNavigator economics: our CHDD port is recorded as
-  `NOT_OFFICIAL_PENDING_TNAV_REFERENCE`, and the compensation policy as
-  `OFFICIAL_UNKNOWN_PORT`;
-- no statement about organizer acceptance tolerance;
-- **the model did not choose numerical setpoints.** The LLM emitted structural
-  hypotheses only; every **numerical well control** reaching the simulator was
-  produced by the deterministic MagnitudeResolver, downstream of the
-  specialists, under the `NO_SETPOINTS_CROSS` boundary. Physical outcomes come
-  from OPM and economics from the CHDD calculator.
+| файл | содержание |
+|---|---|
+| `wells_schedule.inc` | каноническое самодостаточное расписание |
+| `final_result.json` | машиночитаемые итоговые величины |
+| `reproducibility.json` | идентичности прогона: код, образ симулятора, кейс, кандидат, экономический вход |
+| `SHA256SUMS.txt` | контрольные суммы пакета |

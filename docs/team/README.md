@@ -79,9 +79,9 @@ PromptBuilder/GroundingAuditor/ProposalCompiler и CompensationPolicy port
 `KT3-FINAL-EVIDENCE-PATCH-001` (код `3582a40`): MAS OFF 5325.046561 -> MAS ON
 5412.255034 млн ₽, прирост **+87.208 млн ₽**. Guardian траектории: 5904
 проверки закоммиченного кандидата, 0 нарушений. Из трёх эпох решения последняя
-закрылась детерминированным полом после `provider_error`. Архив прежнего
-измерения `PERF-004-CAUSAL-CLEAN-001`:
-[`submission_evidence/`](../../submission_evidence/README.md).
+закрылась детерминированным полом после `provider_error`. Пакет свидетельств:
+[`submission_evidence/`](../../submission_evidence/README.md). Прежнее измерение
+`PERF-004-CAUSAL-CLEAN-001` заменено и остаётся только в истории git.
 
 Доказано ровно то, что измерено: один замкнутый прогон бенчмарка на три эпохи
 решения. Это не заявление о промышленной зрелости.
