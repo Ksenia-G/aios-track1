@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Прокладка вместо docker внутри контейнера страницы.
+
+Контейнер уже собран из образа OPM, поэтому `docker run --rm -v <каталог>:/data
+<образ> flow /data/X ...` выполняется как `flow <каталог>/X ...`. Проверки
+окружения (`docker info`, `docker image inspect`, `docker pull`) отвечают
+успехом: образ и есть этот контейнер.
+"""
+
+import os
+import sys
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        return 1
+    command, rest = argv[0], argv[1:]
+    if command in ("info", "pull", "version"):
+        return 0
+    if command == "image" and rest[:1] == ["inspect"]:
+        return 0
+    if command != "run":
+        print(f"docker-shim: команда {command!r} не поддерживается", file=sys.stderr)
+        return 1
+
+    mounts: dict[str, str] = {}
+    index = 0
+    while index < len(rest) and rest[index].startswith("-"):
+        option = rest[index]
+        if option in ("-v", "--volume"):
+            host, target = rest[index + 1].split(":", 1)
+            mounts[target.split(":")[0]] = host
+            index += 2
+        elif option == "--rm":
+            index += 1
+        else:
+            print(f"docker-shim: опция {option!r} не поддерживается", file=sys.stderr)
+            return 1
+    program = rest[index + 1 :]  # rest[index] -- имя образа
+    if not program:
+        return 1
+
+    def local(arg: str) -> str:
+        for target, host in mounts.items():
+            if arg == target or arg.startswith(target + "/"):
+                return host + arg[len(target) :]
+            if "=" in arg:
+                key, value = arg.split("=", 1)
+                if value == target or value.startswith(target + "/"):
+                    return f"{key}={host}{value[len(target):]}"
+        return arg
+
+    program = [local(arg) for arg in program]
+    os.execvp(program[0], program)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

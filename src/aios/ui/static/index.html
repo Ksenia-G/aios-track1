@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>magic · AIOS Track 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --accent:#232dcd;--accent-2:#3d47da;--accent-3:#5d68e4;--accent-4:#8891ee;
+  --accent-dim:rgba(35,45,205,.08);--accent-dim2:rgba(35,45,205,.14);
+  --bg:#fff;--bg-section:#F8FAFD;--bg-subtle:#F4F6FB;
+  --border:rgba(35,45,205,.12);--border-strong:rgba(35,45,205,.22);--border-subtle:rgba(11,12,20,.08);
+  --fg1:#0B0C14;--fg2:rgba(11,12,20,.66);--fg3:rgba(11,12,20,.42);--fg4:rgba(11,12,20,.22);
+  --ok:#10a345;--warn:#c98a00;--fail:#e5484d;--ink:#0B0C14;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --radius:16px;
+  --shadow-1:0 2px 8px rgba(35,45,205,.06),0 1px 2px rgba(11,12,20,.04);
+  --shadow-2:0 6px 24px rgba(35,45,205,.10),0 2px 6px rgba(11,12,20,.05);
+  --shadow-accent:0 6px 24px rgba(35,45,205,.28);
+  --fs-display:clamp(48px,6.2vw,88px);--fs-h2:clamp(28px,3.2vw,40px);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+/* Базовый масштаб: при 100% в браузере страница выглядит так, как раньше при 110%. */
+html{scroll-behavior:smooth;scroll-padding-top:84px;zoom:1.1}
+body{margin:0;font-family:var(--font);font-size:15px;line-height:1.55;color:var(--fg1);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+code{font-family:var(--mono);font-size:.88em;background:var(--accent-dim);color:var(--accent);padding:2px 6px;border-radius:6px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px}
+.muted{color:var(--fg3)}
+
+/* ── навигация ─────────────────────────────────────────── */
+.nav{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.88);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--border-subtle)}
+.nav .wrap{display:flex;align-items:center;gap:36px;height:68px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:14px;letter-spacing:.04em;color:var(--accent)}
+.brand-mark{width:36px;height:36px;flex:none}
+.brand small{display:block;font-weight:500;font-size:11px;letter-spacing:.01em;color:var(--fg3);margin-top:1px}
+.team{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;letter-spacing:.06em}
+.nav-links{display:flex;gap:28px;font-size:14px;font-weight:500;color:var(--fg2)}
+.nav-links a:hover{color:var(--accent)}
+.env-pill{margin-left:auto;display:inline-flex;align-items:center;gap:9px;padding:9px 18px;border:1px solid var(--border-strong);border-radius:999px;font-size:13px;font-weight:500;color:var(--accent);white-space:nowrap}
+.env-pill:hover{background:var(--accent-dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--fg4);flex:none;display:inline-block}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(16,163,69,.14)}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(201,138,0,.14)}
+.dot.fail{background:var(--fail);box-shadow:0 0 0 3px rgba(229,72,77,.14)}
+.dot.run{background:var(--accent-3);animation:blink 1.2s ease-in-out infinite}
+.dot.idle{background:var(--fg4)}
+@keyframes blink{50%{opacity:.3}}
+.offline{background:#fff6e6;color:#7a4b00;border-bottom:1px solid #f3d7a6;padding:12px 32px;font-size:14px;text-align:center}
+
+/* ── первый экран ──────────────────────────────────────── */
+.hero{position:relative;overflow:hidden;padding:60px 0 76px;background-image:radial-gradient(rgba(35,45,205,.12) 1px,transparent 1px);background-size:28px 28px}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.35) 0%,rgba(255,255,255,.7) 60%,#fff 100%);pointer-events:none}
+.hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.02fr 1fr;gap:40px;align-items:center}
+.badges{display:flex;gap:10px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:9px;padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--fg2)}
+.badge .dot{background:var(--accent);box-shadow:none;width:6px;height:6px}
+.badge.team-badge{background:var(--accent);border-color:var(--accent);color:#fff;letter-spacing:.12em}
+.badge.team-badge .dot{background:#fff}
+h1{font-size:var(--fs-display);font-weight:800;letter-spacing:-.038em;line-height:1.02;margin:24px 0 24px}
+h1 .u{color:var(--accent);text-decoration:underline;text-decoration-thickness:.075em;text-underline-offset:.13em}
+.lead{font-size:clamp(17px,1.3vw,19px);font-weight:500;max-width:32em;margin:0 0 12px;line-height:1.45}
+.sub{color:var(--fg2);max-width:34em;margin:0 0 32px}
+.actions{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 24px;border-radius:999px;font:600 15px/1 var(--font);cursor:pointer;border:1px solid transparent;transition:transform .15s,box-shadow .15s,background .15s,color .15s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff;box-shadow:var(--shadow-accent)}
+.btn-primary:hover{background:var(--accent-2);transform:translateY(-1px)}
+.btn-ghost{background:#fff;color:var(--accent);border-color:var(--border-strong)}
+.btn-ghost:hover{background:var(--accent-dim)}
+.btn-sm{height:34px;padding:0 14px;font-size:13px}
+.btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
+.btn.flash{animation:flash 1.4s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(35,45,205,.6)}100%{box-shadow:0 0 0 20px rgba(35,45,205,0)}}
+.hero-figure{position:relative;width:100%;aspect-ratio:640/520}
+.hero-figure svg{position:absolute;inset:0;width:100%;height:100%}
+.bracket{position:absolute;width:22px;height:22px;border:2px solid var(--accent)}
+.bracket.tl{top:0;left:0;border-right:0;border-bottom:0}.bracket.tr{top:0;right:0;border-left:0;border-bottom:0}
+.bracket.bl{bottom:0;left:0;border-right:0;border-top:0}.bracket.br{bottom:0;right:0;border-left:0;border-top:0}
+.net .ring{fill:none;stroke:rgba(35,45,205,.09)}
+.net .dashed{fill:none;stroke:rgba(35,45,205,.22);stroke-dasharray:3 6}
+.net .loop{fill:none;stroke:rgba(35,45,205,.38);stroke-width:1.2;stroke-dasharray:4 5}
+.net .spoke{stroke:var(--accent);stroke-width:1.3;stroke-dasharray:2 4;opacity:.7}
+.net .core{fill:#fff;stroke:var(--accent);stroke-width:2}
+.net .core-t{font:800 24px var(--font);fill:var(--accent);text-anchor:middle;letter-spacing:.02em}
+.net .core-s{font:600 8.5px var(--mono);fill:var(--fg3);text-anchor:middle;letter-spacing:.16em}
+.net .n{fill:#fff;stroke:var(--accent);stroke-width:2}
+.net .n.llm{fill:var(--accent)}
+.net .halo{fill:var(--accent);transform-box:fill-box;transform-origin:center;animation:halo 2.6s ease-out infinite}
+.net .lbl{font:600 10.5px var(--mono);fill:var(--fg2);letter-spacing:.1em}
+.net .lbl.llm{fill:var(--accent)}
+.net .deco{fill:var(--accent-4)}
+.net .runner{fill:var(--accent)}
+@keyframes halo{0%{opacity:.5;transform:scale(1)}100%{opacity:0;transform:scale(2.6)}}
+.float-card{position:absolute;right:3%;bottom:5%;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-2);padding:14px 18px;min-width:200px}
+.fc-top{display:flex;justify-content:space-between;align-items:center;gap:16px;font:600 10.5px var(--mono);letter-spacing:.1em;color:var(--fg3);text-transform:uppercase}
+.fc-top .live{display:inline-flex;align-items:center;gap:6px;color:var(--ok)}
+.fc-val{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--accent);margin-top:6px}
+.fc-sub{font-size:12px;color:var(--fg3);margin-top:2px}
+
+/* ── цифры ─────────────────────────────────────────────── */
+.stats{background:#fff;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)}
+.stats .grid{display:grid;grid-template-columns:repeat(4,1fr)}
+.stat{padding:32px 24px 28px;border-left:1px solid var(--border-subtle)}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{display:block;font-size:clamp(30px,3.4vw,44px);font-weight:800;letter-spacing:-.03em;color:var(--accent);line-height:1.05}
+.stat span{display:block;margin-top:10px;font-size:13px;color:var(--fg2);max-width:22em}
+.note{font-size:12.5px;color:var(--fg3);margin:0;padding:0 0 24px}
+
+/* ── шаг 1 ─────────────────────────────────────────────── */
+section.block{padding:88px 0}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+h2{font-size:var(--fs-h2);font-weight:800;letter-spacing:-.025em;line-height:1.1;margin:0 0 14px}
+.section-sub{color:var(--fg2);max-width:46em;margin:0 0 36px}
+.card{background:#fff;border:1px solid var(--border-subtle);border-radius:var(--radius);box-shadow:var(--shadow-1)}
+.prep{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.panel-title{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--border-subtle);font-weight:700}
+.link{background:none;border:0;color:var(--accent);font:600 13px var(--font);cursor:pointer;padding:0}
+.check{display:flex;gap:14px;padding:15px 22px;border-top:1px solid var(--border-subtle)}
+.check:first-child{border-top:0}
+.check .dot{margin-top:7px}
+.check h4{margin:0;font-size:15px;font-weight:600}
+.check p{margin:3px 0 0;font-size:13px;color:var(--fg2);word-break:break-word}
+.howto{padding:26px 26px 24px}
+.howto h3{margin:0 0 18px;font-size:18px;font-weight:700}
+.howto ol{list-style:none;margin:0;padding:0;display:grid;gap:18px;counter-reset:s}
+.howto li{display:grid;grid-template-columns:34px 1fr;gap:14px;counter-increment:s}
+.howto li::before{content:counter(s);width:34px;height:34px;border-radius:50%;background:var(--accent-dim2);color:var(--accent);display:grid;place-items:center;font-weight:800}
+.howto li b{display:block;font-size:15px}
+.howto li span{font-size:13.5px;color:var(--fg2)}
+.tech{margin-top:22px;padding-top:18px;border-top:1px solid var(--border-subtle);display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:13px;color:var(--fg3)}
+.tech-buttons{display:flex;flex-wrap:wrap;gap:8px}
+
+/* ── шаг 2: граф контура на весь экран ─────────────────── */
+.loop-section{background:var(--bg-section);border-top:1px solid var(--border-subtle);padding:40px 0 56px;min-height:100vh}
+.loop-wrap{max-width:1440px;margin:0 auto;padding:0 28px}
+.loop-head{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:18px}
+.loop-head h2{margin:0}
+.loop-head .eyebrow{margin-bottom:8px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-left:auto;font-size:12.5px;color:var(--fg2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:12px;height:12px;border-radius:4px;display:inline-block}
+.legend .l-llm{background:var(--accent)}
+.legend .l-det{background:#fff;border:1.5px solid var(--fg4)}
+.legend .l-sim{background:var(--ink)}
+.legend .l-econ{background:rgba(16,163,69,.25);border:1.5px solid #0b7a33}
+.controlbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:18px 26px;align-items:start;background:#fff;border:1px solid var(--border-subtle);border-radius:var(--radius);box-shadow:var(--shadow-1);padding:18px 22px;margin-bottom:16px}
+.run-opt{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
+.run-opt p{margin:0;font-size:13px;line-height:1.45;color:var(--fg2)}
+.run-opt .tag{display:inline-block;margin-right:8px;padding:1px 8px;border-radius:999px;background:var(--bg-2,#f1f2f6);color:var(--fg1);font-weight:600;font-size:12px;white-space:nowrap}
+.rv-state{align-self:center;justify-self:end;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--fg2);padding-left:22px;border-left:1px solid var(--border-subtle);min-height:44px;white-space:nowrap}
+@media (max-width:900px){.controlbar{grid-template-columns:1fr}.rv-state{justify-self:start;border-left:0;padding-left:0;min-height:0}}
+@media (max-width:600px){.brand small{display:none}.rv-state{white-space:normal;flex-wrap:wrap}.controlbar{padding:16px}}
+.rv-state .elapsed{font-family:var(--mono);color:var(--fg3)}
+.verdict-bar{display:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:14px;margin-bottom:16px}
+.verdict-bar.ok{display:block;background:rgba(16,163,69,.10);color:#0b7a33}
+.verdict-bar.fail{display:block;background:rgba(229,72,77,.10);color:#c22b30}
+.verdict-bar.warn{display:block;background:rgba(201,138,0,.12);color:#8a5d00}
+.stage{display:block}
+.canvas{position:relative;background:#fff;border:1px solid var(--border-subtle);border-radius:20px;box-shadow:var(--shadow-1);padding:22px 22px 22px 46px;background-image:radial-gradient(rgba(35,45,205,.09) 1px,transparent 1px);background-size:22px 22px}
+.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:2}
+.band{position:relative;border-radius:16px;padding:42px 16px 16px;border:1px dashed var(--border-strong)}
+.band+.band{margin-top:50px}
+.band.top{background:linear-gradient(180deg,rgba(35,45,205,.05),rgba(35,45,205,.015))}
+.band.bottom{background:rgba(255,255,255,.75)}
+.band-label{position:absolute;top:13px;left:18px;display:flex;align-items:center;gap:10px;font:700 11px var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.band-label em{font-style:normal;font-weight:500;letter-spacing:0;text-transform:none;color:var(--fg3);font-size:12.5px}
+.band-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:40px;align-items:center}
+.cell{display:flex;flex-direction:column;gap:14px;min-width:0}
+.node{position:relative;z-index:3;display:flex;flex-direction:column;gap:6px;text-align:left;width:100%;min-height:132px;padding:12px 14px 13px;border:1.5px solid var(--border-subtle);border-radius:14px;background:#fff;box-shadow:var(--shadow-1);cursor:pointer;font:inherit;color:inherit;transition:border-color .25s,box-shadow .25s,opacity .25s,background .25s,transform .2s}
+.node:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+.node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node .row1{display:flex;align-items:center;gap:8px}
+.node .mk{width:18px;height:18px;border-radius:50%;border:2px solid var(--fg4);display:grid;place-items:center;font:800 10px/1 var(--font);color:#fff;background:#fff;flex:none;position:relative}
+.kd{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--bg-subtle);color:var(--fg2);white-space:nowrap;margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kd.llm{background:var(--accent);color:#fff}
+.kd.sim{background:var(--ink);color:#fff}
+.kd.econ{background:rgba(16,163,69,.12);color:#0b7a33}
+.node .nm{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.25;overflow-wrap:break-word;hyphens:manual}
+.node .ds{font-size:12px;color:var(--fg2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.node .st{margin-top:auto;font:11.5px/1.35 var(--mono);color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node .bar{height:3px;border-radius:3px;background:var(--bg-subtle);overflow:hidden;display:none}
+.node .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-3),var(--accent));transition:width .6s ease}
+.node.has-bar .bar{display:block}
+.node.llm-node{border-color:rgba(35,45,205,.35);background:linear-gradient(180deg,#fff,rgba(35,45,205,.06))}
+.node.active{border-color:var(--accent);box-shadow:0 0 0 5px rgba(35,45,205,.12),var(--shadow-2);background:linear-gradient(180deg,#fff,rgba(35,45,205,.07))}
+.node.active .mk{border-color:var(--accent);background:var(--accent)}
+.node.active .mk::before{content:"";width:6px;height:6px;border-radius:50%;background:#fff}
+.node.active .mk::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--accent);opacity:0;animation:ring 1.6s ease-out infinite}
+.node.active .st{color:var(--accent)}
+.node.done .mk{border-color:var(--accent);background:var(--accent)}
+.node.done .mk::before{content:"✓"}
+.node.frozen{opacity:.85}
+.node.frozen .mk{border-color:var(--accent-4);background:var(--accent-4)}
+.node.frozen .mk::before{content:"✓"}
+.node.skip{opacity:.5}
+.node.skip .mk{border-style:dashed}
+.node.fail{border-color:rgba(229,72,77,.6)}
+.node.fail .mk{border-color:var(--fail);background:var(--fail)}
+.node.fail .mk::before{content:"✕"}
+.node.fail .st{color:#c22b30}
+.node.selected{outline:2.5px solid var(--accent-4);outline-offset:3px}
+@keyframes ring{0%{opacity:.6;transform:scale(.8)}100%{opacity:0;transform:scale(1.7)}}
+.e{fill:none;stroke-linecap:round}
+.e-pending{stroke:rgba(35,45,205,.28);stroke-width:1.5;stroke-dasharray:3 6}
+.e-done{stroke:var(--accent);stroke-width:2}
+.e-frozen{stroke:var(--accent-4);stroke-width:1.8}
+.e-flow{stroke:var(--accent);stroke-width:2.6;stroke-dasharray:8 8;animation:flow .7s linear infinite}
+.e-fail{stroke:var(--fail);stroke-width:2;stroke-dasharray:4 4}
+.e-loop{stroke:var(--accent-4);stroke-width:1.6;stroke-dasharray:5 6}
+.e-head{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.e-label{font:700 10px var(--font);letter-spacing:.12em;text-transform:uppercase;fill:var(--accent)}
+.e-label-bg{fill:#fff}
+@keyframes flow{to{stroke-dashoffset:-16}}
+.insp{margin-top:16px;display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.6fr);grid-template-rows:auto 1fr;background:var(--ink);color:rgba(255,255,255,.86);border-radius:20px;overflow:hidden;min-width:0;scroll-margin-top:90px}
+.insp-head{grid-row:1/3;padding:20px 22px;border-right:1px solid rgba(255,255,255,.08)}
+.insp-top{display:flex;align-items:center;gap:10px}
+.insp .kd{margin-left:0;background:rgba(255,255,255,.12);color:rgba(255,255,255,.8)}
+.insp .kd.llm{background:var(--accent);color:#fff}
+.insp .kd.sim{background:#fff;color:var(--ink)}
+.insp .kd.econ{background:rgba(16,163,69,.28);color:#8ff0b8}
+.insp-meta{margin-left:auto;font:12px var(--mono);color:rgba(255,255,255,.5);white-space:nowrap}
+.insp h4{margin:10px 0 6px;font-size:18px;font-weight:700;color:#fff;letter-spacing:-.01em}
+.insp-desc{margin:0;font-size:13px;line-height:1.5;color:rgba(255,255,255,.66)}
+.insp-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:12px 0 0;font-size:12.5px}
+.insp-facts dt{color:rgba(255,255,255,.45)}
+.insp-facts dd{margin:0;color:#fff;font-family:var(--mono);font-size:12px;word-break:break-word}
+.insp-hint{font-size:12px;color:rgba(255,255,255,.42);padding:16px 22px 0}
+.insp-body{font:12.5px/1.65 var(--mono);padding:10px 22px 20px;overflow:auto;white-space:pre-wrap;word-break:break-word;min-height:200px;max-height:380px}
+.insp-empty{color:rgba(255,255,255,.4)}
+.why{margin:2px 0 14px;padding:12px 14px;border-radius:12px;background:rgba(136,145,238,.12);border:1px solid rgba(136,145,238,.3);font:13px/1.5 var(--font);white-space:normal;color:rgba(255,255,255,.86)}
+.why.live{background:rgba(35,45,205,.35);border-color:rgba(136,145,238,.6);color:#fff}
+.why b{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-4);margin-bottom:6px}
+.why p{margin:0 0 5px;white-space:pre-line}.why p:last-child{margin:0}
+.l-ok{color:#5ee49a}.l-fail{color:#ff8080}.l-verdict{color:#fff;font-weight:700}.l-dim{color:rgba(255,255,255,.42)}.l-epoch{color:var(--accent-4);font-weight:600}
+.rawlog{margin-top:16px;background:#fff;border:1px solid var(--border-subtle);border-radius:var(--radius);overflow:hidden}
+.rawlog summary{cursor:pointer;padding:14px 20px;font-size:13px;font-weight:600;color:var(--fg2);list-style:none;display:flex;gap:8px}
+.rawlog summary::-webkit-details-marker{display:none}
+.rawlog summary::before{content:"▸";color:var(--accent)}
+.rawlog[open] summary::before{content:"▾"}
+.console-body{font:12.5px/1.6 var(--mono);color:rgba(255,255,255,.78);background:var(--ink);padding:16px 20px;height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+
+/* ── локальный запуск ──────────────────────────────────── */
+pre.terminal{background:var(--ink);color:rgba(255,255,255,.88);border-radius:var(--radius);padding:22px 24px;font:12.5px/1.75 var(--mono);overflow:auto;margin:0}
+pre.terminal .c{color:rgba(255,255,255,.4)}
+
+footer{border-top:1px solid var(--border-subtle);padding:28px 0 36px;color:var(--fg3);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+footer b{color:var(--accent)}
+
+@media (max-width:1200px){
+  .band-grid{column-gap:28px}
+}
+@media (max-width:900px){
+  .insp{grid-template-columns:1fr}.insp-head{grid-row:auto;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+}
+@media (max-width:1080px){
+  .hero .wrap{grid-template-columns:1fr}.hero-figure{max-width:600px;margin:8px auto 0}
+  .prep{grid-template-columns:1fr}.nav-links{display:none}
+}
+@media (max-width:860px){
+  .band-grid{grid-template-columns:1fr;row-gap:16px}
+  .band.bottom .cell{order:calc(10 - var(--col))}
+  .cell{grid-column:auto!important;grid-row:auto!important}
+  .edges{display:none}.canvas{padding-left:22px}
+}
+@media (max-width:720px){
+  .wrap,.loop-wrap{padding:0 18px}.stats .grid{grid-template-columns:1fr 1fr}.stat{border-left:0;padding-left:0}
+  section.block{padding:64px 0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="20" cy="20" r="11" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 3"/>
+        <circle cx="20" cy="20" r="4.5" fill="currentColor"/>
+        <circle cx="20" cy="2" r="2.2" fill="currentColor"/>
+        <circle cx="35.6" cy="29" r="2.2" fill="currentColor"/>
+        <circle cx="4.4" cy="29" r="2.2" fill="currentColor"/>
+      </svg>
+      <span>AIOS · TRACK 1<span class="team">команда magic</span><small>гибридная мультиагентная система</small></span>
+    </a>
+    <nav class="nav-links" aria-label="Разделы">
+      <a href="#prepare">Окружение</a>
+      <a href="#loop">Контур решения</a>
+      <a href="#local">Локальный запуск</a>
+    </nav>
+    <a class="env-pill" id="env-pill" href="#prepare"><span class="dot run"></span><span>Проверяю окружение…</span></a>
+  </div>
+</header>
+
+<div class="offline" id="offline" hidden>Страница открыта без сервера. Запустите <code>mise run ui</code>, и данные с кнопками заработают.</div>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="badges">
+          <span class="badge team-badge"><span class="dot"></span>Команда magic</span>
+          <span class="badge"><span class="dot"></span>Трек 01 · Model Y · 2014-2015</span>
+        </div>
+        <h1>Гибридная<br><span class="u">MAS</span></h1>
+        <p class="lead">Языковая модель предлагает, что делать со скважинами. Детерминированный код решает, сколько. Физику считает OPM Flow, экономику считает официальный калькулятор ЧДД.</p>
+        <p class="sub">Решение команды magic: замкнутый контур управления заводнением. Управляющие последовательности → симулятор → расчёт ЧДД, и каждый шаг виден на графе.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#loop" id="hero-run">Запустить сквозной прогон <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="#loop">Посмотреть граф</a>
+        </div>
+      </div>
+
+      <div class="hero-figure" aria-hidden="true">
+        <span class="bracket tl"></span><span class="bracket tr"></span><span class="bracket bl"></span><span class="bracket br"></span>
+        <svg class="net" viewBox="0 0 640 520">
+          <circle class="ring" cx="320" cy="260" r="236"/>
+          <circle class="dashed" cx="320" cy="260" r="170"/>
+          <circle class="ring" cx="320" cy="260" r="108"/>
+          <circle class="deco" cx="541.8" cy="340.7" r="3"/>
+          <circle class="deco" cx="98.2" cy="179.3" r="3"/>
+          <circle class="deco" cx="239.3" cy="38.2" r="2.5"/>
+          <circle class="deco" cx="400.7" cy="481.8" r="2.5"/>
+          <polygon class="loop" points="320,90 440.2,139.8 490,260 440.2,380.2 320,430 199.8,380.2 150,260 199.8,139.8"/>
+          <line class="spoke" x1="320" y1="260" x2="440.2" y2="139.8"/>
+          <line class="spoke" x1="320" y1="260" x2="490" y2="260"/>
+          <circle class="core" cx="320" cy="260" r="62"/>
+          <text class="core-t" x="320" y="262">MAS</text>
+          <text class="core-s" x="320" y="283">CLOSED LOOP</text>
+          <circle class="n" cx="320" cy="90" r="8"/>
+          <circle class="halo" cx="440.2" cy="139.8" r="9"/>
+          <circle class="n llm" cx="440.2" cy="139.8" r="9"/>
+          <circle class="halo" cx="490" cy="260" r="9" style="animation-delay:1.3s"/>
+          <circle class="n llm" cx="490" cy="260" r="9"/>
+          <circle class="n" cx="440.2" cy="380.2" r="8"/>
+          <circle class="n" cx="320" cy="430" r="8"/>
+          <circle class="n" cx="199.8" cy="380.2" r="8"/>
+          <circle class="n" cx="150" cy="260" r="8"/>
+          <circle class="n" cx="199.8" cy="139.8" r="8"/>
+          <text class="lbl" x="320" y="66" text-anchor="middle">STATE</text>
+          <text class="lbl llm" x="462" y="132">PRODUCTION · LLM</text>
+          <text class="lbl llm" x="512" y="264">INJECTION · LLM</text>
+          <text class="lbl" x="462" y="398">ARBITER</text>
+          <text class="lbl" x="320" y="462" text-anchor="middle">RESOLVER</text>
+          <text class="lbl" x="178" y="398" text-anchor="end">OPM FLOW</text>
+          <text class="lbl" x="128" y="264" text-anchor="end">GUARDIAN</text>
+          <text class="lbl" x="178" y="132" text-anchor="end">ЧДД</text>
+          <circle class="runner" r="4.5">
+            <animateMotion dur="11s" repeatCount="indefinite" path="M320,90 L440.2,139.8 L490,260 L440.2,380.2 L320,430 L199.8,380.2 L150,260 L199.8,139.8 Z"/>
+          </circle>
+        </svg>
+        <div class="float-card">
+          <div class="fc-top"><span>ЧДД · MAS ON</span><span class="live"><span class="dot ok"></span>frozen</span></div>
+          <div class="fc-val" id="float-delta">…</div>
+          <div class="fc-sub">к MAS OFF, сопоставимая шкала</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="wrap grid">
+      <div class="stat"><b id="stat-npv">…</b><span>млн ₽, ЧДД MAS ON в сопоставимой с организаторской шкале</span></div>
+      <div class="stat"><b id="stat-delta">…</b><span id="stat-delta-sub">млн ₽ к детерминированной абляции MAS OFF</span></div>
+      <div class="stat"><b id="stat-obj">…</b><span>млн ₽, ЧДД на управляемом окне 2014-2015</span></div>
+      <div class="stat"><b id="stat-guard">…</b><span>нарушений ограничений / проверок закоммиченной политики</span></div>
+    </div>
+    <div class="wrap"><p class="note" id="stat-note">Это наш собственный воспроизведённый результат, а не итог ранжирования организаторов.</p></div>
+  </section>
+
+  <section class="block" id="prepare">
+    <div class="wrap">
+      <p class="eyebrow">Шаг 1</p>
+      <h2>Окружение</h2>
+      <p class="section-sub">Для прогона нужны колода Model Y, официальный калькулятор ЧДД и Docker с образом OPM. Пути задаются в <code>.env</code>, страница проверяет их сама.</p>
+      <div class="prep">
+        <div class="card">
+          <div class="panel-title"><span>Готовность окружения</span><button class="link" id="recheck" type="button">Проверить снова</button></div>
+          <div id="checks"><div class="check"><span class="dot run"></span><div><h4>Проверяю…</h4><p>Колода, калькулятор, Docker, провайдер и пакет сабмишена.</p></div></div></div>
+        </div>
+        <div class="card howto">
+          <h3>Как пользоваться</h3>
+          <ol>
+            <li><div><b>Окружение зелёное</b><span>Если что-то красное, поправьте путь в <code>.env</code> и нажмите «Проверить снова».</span></div></li>
+            <li><div><b>Нажмите «Запустить сквозной прогон»</b><span>Сданные управляющие последовательности уйдут в OPM, траектория в калькулятор ЧДД, результат сверится с заявкой. Около двух минут.</span></div></li>
+            <li><div><b>Смотрите на граф</b><span>Работающий узел подсвечен. Клик по любому узлу показывает, что он делает и что он выдал.</span></div></li>
+          </ol>
+          <div class="tech"><span>Технические проверки:</span><span class="tech-buttons" id="tech-buttons"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="loop-section" id="loop">
+    <div class="loop-wrap">
+      <div class="loop-head">
+        <div>
+          <p class="eyebrow">Шаг 2</p>
+          <h2>Контур решения</h2>
+        </div>
+        <div class="legend" aria-label="Обозначения">
+          <span><i class="l-llm"></i>агент LLM: предлагает структуру</span>
+          <span><i class="l-det"></i>детерм.: детерминированно, числа и правила</span>
+          <span><i class="l-sim"></i>симулятор</span>
+          <span><i class="l-econ"></i>экономика</span>
+        </div>
+      </div>
+
+      <div class="controlbar">
+        <div class="run-opt">
+          <button class="btn btn-primary" id="run-verify" type="button" disabled>Запустить сквозной прогон</button>
+          <p><span class="tag">≈ 2 мин</span>Сданные управляющие последовательности → OPM → расчёт ЧДД → сверка с заявкой</p>
+        </div>
+        <div class="run-opt">
+          <button class="btn btn-ghost" id="run-mas" type="button" disabled>Полный контур MAS</button>
+          <p><span class="tag">≈ 1 ч · нужен LLM</span>Вся цепочка агентов, три эпохи решения, с обоснованием каждого шага</p>
+        </div>
+        <span class="rv-state" aria-live="polite">
+          <span class="dot idle" id="rv-dot"></span><span id="rv-state">готов к запуску</span>
+          <span class="elapsed" id="rv-elapsed"></span>
+          <button class="btn btn-ghost btn-sm" id="rv-stop" type="button" hidden>Остановить</button>
+        </span>
+      </div>
+      <div class="verdict-bar" id="verdict"></div>
+
+      <div class="stage">
+        <div class="canvas" id="canvas">
+          <svg class="edges" id="edges" aria-hidden="true"></svg>
+          <div class="band top">
+            <div class="band-label">Решение <em>агенты предлагают, что делать; арбитр и резолвер превращают это в кандидатов</em></div>
+            <div class="band-grid" id="band-top"></div>
+          </div>
+          <div class="band bottom">
+            <div class="band-label">Исполнение <em>физика, ограничения и экономика, только детерминированно</em></div>
+            <div class="band-grid" id="band-bottom"></div>
+          </div>
+        </div>
+        <aside class="insp" aria-live="polite">
+          <div class="insp-head">
+            <div class="insp-top"><span class="kd" id="insp-kind">…</span><span class="insp-meta" id="insp-meta"></span></div>
+            <h4 id="insp-title">…</h4>
+            <p class="insp-desc" id="insp-desc"></p>
+            <dl class="insp-facts" id="insp-facts"></dl>
+          </div>
+          <div class="insp-hint" id="insp-hint">Клик по узлу покажет, что он делает и что выдал.</div>
+          <div class="insp-body" id="insp-body"><span class="insp-empty">Вывод узла появится во время прогона.</span></div>
+        </aside>
+      </div>
+
+      <details class="rawlog" id="rawlog">
+        <summary>Полный лог прогона <span class="muted" id="rawlog-count"></span></summary>
+        <div class="console-body" id="console-body"><span class="l-dim">Пока пусто.</span></div>
+      </details>
+    </div>
+  </section>
+
+  <section class="block" id="local">
+    <div class="wrap">
+      <p class="eyebrow">Локальный запуск</p>
+      <h2>То же самое из терминала</h2>
+      <p class="section-sub">Страница запускает те же команды. Материалы организаторов в репозиторий не входят, пути к ним указываются в <code>.env</code>.</p>
+<pre class="terminal"><span class="c"># один раз на свежем клоне</span>
+mise trust &amp;&amp; mise install &amp;&amp; mise run bootstrap
+cp .env.example .env               <span class="c"># MODEL_Y_ROOT и CHDD_ROOT: пути к материалам организаторов</span>
+docker pull <span id="cmd-image">openporousmedia/opmreleases@sha256:…</span>
+
+<span class="c"># эта страница</span>
+mise run ui
+
+<span class="c"># то же самое из терминала</span>
+mise run verify                    <span class="c"># сквозной прогон: сданные последовательности → OPM → ЧДД, ход печатается сразу</span>
+mise run validation-demo           <span class="c"># сквозной прогон опорной политики и пакет сабмишена</span>
+mise run progress                  <span class="c"># ход идущего прогона OPM в соседней вкладке</span></pre>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>AIOS Track 1 · решение команды <b>magic</b></span>
+    <span>Итоговые числа читаются из <code>submission_evidence/</code>; пересчитывает их только кнопка прогона.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (selector) => document.querySelector(selector);
+  const nf2 = new Intl.NumberFormat('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const nf0 = new Intl.NumberFormat('ru-RU');
+  const KIND = {llm: ['агент LLM', 'llm', 'агент LLM'], det: ['детерм.', 'det', 'детерминированно'], sim: ['симулятор', 'sim', 'симулятор'], econ: ['экономика', 'econ', 'экономика']};
+  /* Обоснование агента и правило узла -- разные вещи и показываются раздельно:
+     обоснование это слова самого агента, правило это устройство узла. */
+  const PREFERRED_HEADING = 'Почему агент предложил это действие';
+  const CONSIDERED_HEADING = 'Почему агент рассматривал этот вариант';
+  const RULE_HEADING = 'Как этот узел принимает решения';
+  const BADGE_FROZEN = 'Записано в финальном MAS-прогоне';
+  const BADGE_LIVE = 'Записано в идущем прогоне';
+  const RATIONALE_ABSENT = 'Для этого шага объяснение агента не было сохранено.';
+  const SPECIALISTS = new Set(['production', 'injection']);
+  const RULE_WHY = {
+    production: 'Специалист по добыче предлагает структуру: действие, направление, качественную силу и адресацию скважин. Численных уставок не назначает, каждое намерение обязано опираться на evidence. Предложение это ещё не решение: какой кандидат будет закоммичен, решает экономический отбор среди прошедших Guardian.',
+    injection: 'Специалист по закачке предлагает масштаб и перераспределение поддержки. Численных уставок не назначает, каждое намерение обязано опираться на evidence. Предложение это ещё не решение: какой кандидат будет закоммичен, решает экономический отбор среди прошедших Guardian.',
+    arbiter: 'Пол HOLD + baseline всегда в наборе, поэтому у системы всегда есть безопасный вариант. Остальное это гипотезы специалистов в пределах бюджета симуляций.',
+    resolver: 'Числа берутся только из сетки, измеренной в экспериментах EXP-003-005: модель уставок не назначает, поэтому решение воспроизводимо.',
+    guardian: 'Кандидат с нарушением ограничений хотя бы на одном отчётном шаге к отбору не допускается, какой бы ЧДД он ни давал.',
+    selector: 'Правило economic_argmax_chdd_v1: побеждает максимум ЧДД среди допустимых кандидатов, без предпочтений к агентам.',
+  };
+  const NODE_STATE = {pending: 'ожидает', active: 'работает', done: 'готово', fail: 'ошибка', frozen: 'из финального прогона', skip: 'не участвует'};
+  const RUN_STATE = {running: 'идёт', passed: 'готово', failed: 'ошибка', stopped: 'остановлен'};
+  const RUN_DOT = {running: 'run', passed: 'ok', failed: 'fail', stopped: 'warn'};
+
+  /* Граф контура … одна схема на все прогоны. Верхняя полоса идёт слева
+     направо, нижняя … справа налево, петля «следующая эпоха» замыкает цикл. */
+  const NODES = {
+    state: {band: 'top', col: 1, name: 'StateCard', kind: 'det',
+      desc: 'Состояние месторождения, снятое с фактически реализованного прогона: режимы, давления, дебиты, обводнённость.'},
+    diag: {band: 'top', col: 2, name: 'Диагностика', kind: 'det',
+      desc: 'Давление, охват, связность компартментов, дисбаланс закачки и экономические нормативы. Только наблюдения, без рекомендаций.'},
+    production: {band: 'top', col: 3, name: 'Production', kind: 'llm',
+      desc: 'LLM-специалист по добыче. Предлагает структуру: действие, направление, силу и скважины. Чисел не назначает.'},
+    injection: {band: 'top', col: 3, name: 'Injection', kind: 'llm',
+      desc: 'LLM-специалист по закачке: масштаб и перераспределение закачки. Чисел не назначает.'},
+    arbiter: {band: 'top', col: 4, name: 'Arbiter', kind: 'det',
+      desc: 'Собирает структурных кандидатов из гипотез и держит бюджет симуляций: пол HOLD + baseline всегда в наборе.'},
+    resolver: {band: 'top', col: 5, name: 'Magnitude\u00adResolver', kind: 'det',
+      desc: 'Единственная точка, где структура становится числом: уставки берутся из сетки, измеренной в экспериментах.'},
+    schedule: {band: 'bottom', col: 5, name: 'Управляющие последовательности', kind: 'det',
+      desc: 'wells_schedule.inc: неизменная история по 2013-12 и режимы скважин на окне 2014-2015.'},
+    opm: {band: 'bottom', col: 4, name: 'OPM Flow', kind: 'sim',
+      desc: 'Полный гидродинамический прогон кандидата в закреплённом образе симулятора.'},
+    guardian: {band: 'bottom', col: 3, name: 'Guardian', kind: 'det',
+      desc: 'Ограничения проверяются на каждом отчётном шаге горизонта: забойные давления и дебит жидкости.'},
+    chdd: {band: 'bottom', col: 2, name: 'Расчёт ЧДД', kind: 'econ',
+      desc: 'Официальный калькулятор организаторов считает экономику траектории.'},
+    selector: {band: 'bottom', col: 1, name: 'Economic\u00adSelector', kind: 'det',
+      desc: 'Побеждает максимум ЧДД среди допустимых кандидатов. Его режимы становятся входом следующей эпохи.'},
+  };
+  const EDGES = [
+    ['state', 'diag'], ['diag', 'production'], ['diag', 'injection'], ['production', 'arbiter'], ['injection', 'arbiter'],
+    ['arbiter', 'resolver'], ['resolver', 'schedule', 'числа'], ['schedule', 'opm'], ['opm', 'guardian'],
+    ['guardian', 'chdd'], ['chdd', 'selector'],
+  ];
+  const LOOP = ['selector', 'state', 'следующая эпоха'];
+  const ORDER = ['state', 'diag', 'production', 'injection', 'arbiter', 'resolver', 'schedule', 'opm', 'guardian', 'chdd', 'selector'];
+
+  /* Как прогон ложится на граф. */
+  const MODES = {
+    'verify-submission': {
+      frozen: ['state', 'diag', 'production', 'injection', 'arbiter', 'resolver'],
+      skip: ['guardian', 'selector'],
+      alias: {sha: 'schedule', compare: 'chdd'},
+      start: 'schedule',
+      verdicts: {0: ['ok', 'ЧДД сданного файла совпадает с заявленным: управляющие последовательности → OPM → ЧДД воспроизводятся'], 1: ['fail', 'ЧДД не совпадает с заявленным'], 2: ['fail', 'Проверка не выполнена, причина в выводе узла']},
+    },
+    'mas-benchmark': {
+      frozen: [], skip: [], alias: {}, start: 'state',
+      verdicts: {0: ['ok', 'Контур MAS завершён, путь к сводке в полном логе']},
+    },
+  };
+  const TECH = {
+    'validation-demo': {verdicts: {0: ['ok', 'VERDICT: READY, опорная политика воспроизводится, пакет собран']}},
+    'check': {verdicts: {0: ['ok', 'Все тесты прошли']}},
+  };
+
+  let status = null;
+  let result = {};
+  let tasks = [];
+  let active = null;
+  let since = 0;
+  let pollTimer = null;
+  let clock = null;
+  let rawCount = 0;
+  let frame = 0;
+  const G = {mode: null, nodes: {}, pinned: null, touched: null, activeOrder: [], epoch: null};
+
+  const num = (value, format = nf2) => (Number.isFinite(value) ? format.format(value) : '…');
+  const setText = (selector, text) => { const node = $(selector); if (node) node.textContent = text; };
+  const mmss = (seconds) => {
+    const total = Math.max(0, Math.floor(seconds));
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (value === null || value === undefined || value === false) continue;
+      if (key === 'class') node.className = value;
+      else if (key === 'text') node.textContent = value;
+      else node.setAttribute(key, value === true ? '' : value);
+    }
+    for (const child of children) if (child !== null && child !== undefined && child !== false) node.append(child);
+    return node;
+  }
+  async function api(path, options = {}) {
+    const response = await fetch(path, {cache: 'no-store', ...options});
+    let body = {};
+    try { body = await response.json(); } catch (_) { body = {}; }
+    if (!response.ok) { const error = new Error(body.error || response.statusText); error.status = response.status; throw error; }
+    return body;
+  }
+  const post = (path) => api(path, {method: 'POST', headers: {'X-AIOS-UI': '1'}});
+
+  /* ================= граф ================= */
+  function buildGraph() {
+    const bands = {top: $('#band-top'), bottom: $('#band-bottom')};
+    const cells = {};
+    for (const id of ORDER) {
+      const def = NODES[id];
+      const key = def.band + def.col;
+      if (!cells[key]) {
+        cells[key] = el('div', {class: 'cell', style: `grid-column:${def.col};grid-row:1;--col:${def.col}`});
+        bands[def.band].append(cells[key]);
+      }
+      const [kindText, kindClass] = KIND[def.kind];
+      const card = el('button', {class: 'node pending', type: 'button', 'aria-label': def.name},
+        el('span', {class: 'row1'}, el('span', {class: 'mk'}), el('span', {class: 'kd ' + kindClass, text: kindText})),
+        el('span', {class: 'nm', text: def.name}),
+        el('span', {class: 'ds', text: def.desc}),
+        el('span', {class: 'st', text: ''}),
+        el('span', {class: 'bar'}, el('i')));
+      card.addEventListener('click', () => {
+        G.pinned = G.pinned === id ? null : id;
+        scheduleUpdate();
+        const panel = document.querySelector('.insp');
+        const rect = panel.getBoundingClientRect();
+        if (rect.top > window.innerHeight - 120) panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      });
+      cells[key].append(card);
+      G.nodes[id] = {id, ...def, el: card, state: 'pending', lines: [], why: [], status: '', progress: null, started: null, finished: null};
+    }
+  }
+
+  function resetGraph(mode) {
+    G.mode = mode;
+    G.pinned = null;
+    G.touched = null;
+    G.activeOrder = [];
+    G.epoch = null;
+    for (const node of Object.values(G.nodes)) Object.assign(node, {state: 'pending', lines: [], why: [], status: '', progress: null, started: null, finished: null});
+    if (mode) {
+      for (const id of mode.frozen) G.nodes[id].state = 'frozen';
+      for (const id of mode.skip) G.nodes[id].state = 'skip';
+      if (mode.start) setNode(mode.start, 'active');
+    }
+    scheduleUpdate();
+  }
+
+  const currentNode = () => (G.activeOrder.length ? G.activeOrder[G.activeOrder.length - 1] : null);
+  const selectedId = () => G.pinned || currentNode() || G.touched || 'schedule';
+
+  function setNode(id, state) {
+    const node = G.nodes[id];
+    if (!node) return;
+    if (state === 'active') {
+      if (node.state !== 'active') { node.started = Date.now(); node.finished = null; }
+      G.activeOrder = G.activeOrder.filter((item) => item !== id);
+      G.activeOrder.push(id);
+    } else {
+      G.activeOrder = G.activeOrder.filter((item) => item !== id);
+      if (state === 'done' || state === 'fail') node.finished = Date.now();
+    }
+    node.state = state;
+    G.touched = id;
+  }
+
+  function addLine(id, line) {
+    const node = G.nodes[id];
+    if (!node) return;
+    node.lines.push(line);
+    if (node.lines.length > 400) node.lines.splice(0, node.lines.length - 400);
+    const text = line.trim();
+    if (text && !text.startsWith('──')) node.status = text.replace(/^(OPM Flow|ЧДД|Файл|SHA-256|Пересчитано|Заявлено):\s+/, '').replace(/\s{2,}/g, ' ');
+    G.touched = id;
+  }
+
+  /* Строка вывода → состояние графа. true … показать строку в полном логе. */
+  function ingest(line) {
+    if (!G.mode) return true;
+    if (line.startsWith('::aios ')) {
+      let event;
+      try { event = JSON.parse(line.slice(7)); } catch (_) { return false; }
+      if (event.epoch) {
+        G.epoch = event.epoch;
+        G.activeOrder = [];
+        for (const node of Object.values(G.nodes)) {
+          node.state = 'pending';
+          node.progress = null;
+          node.why = [];
+          node.lines.push(`── эпоха ${event.epoch} ──`);
+        }
+      }
+      const id = G.mode.alias[event.node] || event.node;
+      if (id && G.nodes[id]) {
+        if (event.state) setNode(id, event.state);
+        if (event.text && event.why) G.nodes[id].why.push(event.text);
+        else if (event.text) addLine(id, event.text);
+        if (id === 'opm' && event.state === 'active' && G.nodes.schedule.state === 'pending') {
+          setNode('schedule', 'done');
+          addLine('schedule', 'кандидат скомпилирован в расписание');
+        }
+      }
+      return false;
+    }
+    let target = null;
+    const progress = line.match(/OPM Flow:\s+(\d+)% горизонта/);
+    if (progress) {
+      if (G.nodes.opm.state !== 'active') setNode('opm', 'active');
+      G.nodes.opm.progress = Number(progress[1]);
+      target = 'opm';
+    }
+    if (/OPM Flow:\s+симуляция \d+/.test(line)) { G.nodes.opm.progress = 0; target = 'opm'; }
+    target = target || currentNode();
+    if (target) addLine(target, line);
+    return true;
+  }
+
+  function finishGraph(run) {
+    if (!G.mode) return;
+    if (run.status === 'passed') {
+      for (const id of [...G.activeOrder]) setNode(id, 'done');
+    } else {
+      const current = currentNode();
+      if (current) setNode(current, 'fail');
+      else if (run.status === 'failed') {
+        const next = ORDER.find((id) => G.nodes[id].state === 'pending');
+        if (next) setNode(next, 'fail');
+      }
+    }
+    scheduleUpdate();
+  }
+
+  function scheduleUpdate() {
+    if (frame) return;
+    frame = requestAnimationFrame(() => { frame = 0; updateGraph(); });
+  }
+
+  function previewStatus(id) {
+    const final = result.final || {};
+    const compatible = final.organizer_compatible_mln_rub || {};
+    const schedule = final.schedule || {};
+    switch (id) {
+      case 'schedule': return schedule.standalone_sha256 ? `SHA ${schedule.standalone_sha256.slice(0, 12)}… · ${schedule.dates_records_total} DATES` : '';
+      case 'chdd': return Number.isFinite((final.ai_period_objective_mln_rub || {}).B4_MAS_ON) ? `${num(final.ai_period_objective_mln_rub.B4_MAS_ON)} млн ₽ в финале` : '';
+      case 'guardian': return final.guardian ? `${num(final.guardian.committed_failures, nf0)} нарушений из ${num(final.guardian.committed_checks, nf0)}` : '';
+      case 'selector': return Number.isFinite(compatible.delta_MAS_ON_vs_MAS_OFF) ? `+${num(compatible.delta_MAS_ON_vs_MAS_OFF)} млн ₽ к MAS OFF` : '';
+      case 'production': case 'injection': {
+        const epochs = result.epochs || [];
+        const live = epochs.filter((epoch) => !epoch.floor).length;
+        return epochs.length ? `живой моделью ${live} из ${epochs.length} эпох` : '';
+      }
+      default: return '';
+    }
+  }
+
+  function updateGraph() {
+    const selected = selectedId();
+    for (const node of Object.values(G.nodes)) {
+      const hasBar = node.progress !== null && node.progress !== undefined;
+      node.el.className = 'node ' + node.state + (node.kind === 'llm' ? ' llm-node' : '') + (selected === node.id ? ' selected' : '') + (hasBar ? ' has-bar' : '');
+      node.el.querySelector('.st').textContent = node.status || (node.state === 'skip' ? 'в этом прогоне не нужен' : previewStatus(node.id));
+      node.el.querySelector('.bar i').style.width = (hasBar ? node.progress : 0) + '%';
+    }
+    drawEdges();
+    renderInspector();
+  }
+
+  const isDone = (state) => state === 'done' || state === 'frozen' || state === 'skip';
+
+  function drawEdges() {
+    const canvas = $('#canvas');
+    const svg = $('#edges');
+    if (getComputedStyle(svg).display === 'none') return;
+    const base = canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${canvas.clientWidth} ${canvas.clientHeight}`);
+    // Под zoom браузер может отдавать прямоугольники уже в увеличенных
+    // пикселях, а стрелки рисуются в пикселях раскладки: приводим к ним.
+    const k = base.width / canvas.offsetWidth || 1;
+    const box = (id) => {
+      const rect = G.nodes[id].el.getBoundingClientRect();
+      return {x: (rect.left - base.left) / k, y: (rect.top - base.top) / k, w: rect.width / k, h: rect.height / k};
+    };
+    const parts = [];
+    const head = (x, y, dir, cls) => {
+      const d = {right: `M${x - 7},${y - 5} L${x},${y} L${x - 7},${y + 5}`, left: `M${x + 7},${y - 5} L${x},${y} L${x + 7},${y + 5}`,
+                 down: `M${x - 5},${y - 7} L${x},${y} L${x + 5},${y - 7}`}[dir];
+      parts.push(`<path class="e-head ${cls}" style="stroke-dasharray:none;animation:none" d="${d}"/>`);
+    };
+    const label = (x, y, text) => {
+      const width = text.length * 7.5 + 16;
+      parts.push(`<rect class="e-label-bg" x="${x - width / 2}" y="${y - 10}" width="${width}" height="20" rx="10"/>`);
+      parts.push(`<text class="e-label" x="${x}" y="${y + 3.5}" text-anchor="middle">${text}</text>`);
+    };
+    for (const [from, to, text] of EDGES) {
+      const a = box(from);
+      const b = box(to);
+      const source = G.nodes[from].state;
+      const target = G.nodes[to].state;
+      let cls = 'e-pending';
+      if (isDone(source) && target === 'active') cls = 'e-flow';
+      else if (isDone(source) && target === 'fail') cls = 'e-fail';
+      else if (source === 'frozen' && target === 'frozen') cls = 'e-frozen';
+      else if (isDone(source) && isDone(target)) cls = 'e-done';
+      const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
+      const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
+      if (Math.abs(dy) > Math.abs(dx)) {
+        const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + b.w / 2, y2 = b.y;
+        const bend = (y2 - y1) / 2;
+        parts.push(`<path class="e ${cls}" d="M${x1},${y1} C${x1},${y1 + bend} ${x2},${y2 - bend} ${x2},${y2 - 2}"/>`);
+        head(x2, y2 - 2, 'down', cls);
+        if (text) label((x1 + x2) / 2, (y1 + y2) / 2, text);
+      } else if (dx > 0) {
+        const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+        const bend = (x2 - x1) / 2;
+        parts.push(`<path class="e ${cls}" d="M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 2},${y2}"/>`);
+        head(x2 - 2, y2, 'right', cls);
+      } else {
+        const x1 = a.x, y1 = a.y + a.h / 2, x2 = b.x + b.w, y2 = b.y + b.h / 2;
+        const bend = (x1 - x2) / 2;
+        parts.push(`<path class="e ${cls}" d="M${x1},${y1} C${x1 - bend},${y1} ${x2 + bend},${y2} ${x2 + 2},${y2}"/>`);
+        head(x2 + 2, y2, 'left', cls);
+      }
+    }
+    const [from, to, text] = LOOP;
+    const a = box(from);
+    const b = box(to);
+    const x = Math.min(a.x, b.x) - 16;
+    const y1 = a.y + a.h / 2;
+    const y2 = b.y + b.h / 2;
+    parts.push(`<path class="e e-loop" d="M${a.x},${y1} L${x + 8},${y1} Q${x},${y1} ${x},${y1 - 8} L${x},${y2 + 8} Q${x},${y2} ${x + 8},${y2} L${b.x - 2},${y2}"/>`);
+    head(b.x - 2, y2, 'right', 'e-loop');
+    parts.push(`<text class="e-label" text-anchor="middle" transform="translate(${x - 9},${(y1 + y2) / 2}) rotate(-90)">${text}</text>`);
+    svg.innerHTML = parts.join('');
+  }
+
+  function factsFor(id) {
+    const final = result.final || {};
+    const repro = result.reproducibility || {};
+    const schedule = final.schedule || {};
+    const compatible = final.organizer_compatible_mln_rub || {};
+    const epochs = result.epochs || [];
+    switch (id) {
+      case 'schedule': return [['файл', 'submission_evidence/wells_schedule.inc'], ['SHA-256', schedule.standalone_sha256], ['размер', Number.isFinite(schedule.standalone_bytes) ? `${nf0.format(schedule.standalone_bytes)} байт` : null], ['DATES', schedule.dates_records_total ? `${schedule.history_dates_records} история + ${schedule.management_dates_records} окно` : null]];
+      case 'opm': return [['образ', repro.simulator_image], ['горизонт', '2007-05 → 2015-12']];
+      case 'guardian': return [['проверок', num((final.guardian || {}).committed_checks, nf0)], ['нарушений', num((final.guardian || {}).committed_failures, nf0)], ['пределы', 'BHP доб. ≥ 50 · BHP нагн. ≤ 300 · WLPR ≤ 500']];
+      case 'chdd': return [['ЧДД на окне', `${num((final.ai_period_objective_mln_rub || {}).B4_MAS_ON)} млн ₽`], ['сопоставимый', `${num(compatible.B4_MAS_ON)} млн ₽`], ['MAS OFF', `${num(compatible.B3_MAS_OFF)} млн ₽`]];
+      case 'selector': return [['правило', repro.selection_rule], ['кандидат', final.committed_candidate_digest ? final.committed_candidate_digest.slice(0, 16) + '…' : null], ['прирост', Number.isFinite(compatible.delta_MAS_ON_vs_MAS_OFF) ? `+${num(compatible.delta_MAS_ON_vs_MAS_OFF)} млн ₽` : null]];
+      case 'production': case 'injection': case 'arbiter': case 'resolver':
+        return epochs.map((epoch, index) => [`T${index} ${epoch.date}`, epoch.decision]);
+      case 'state': return [['эпохи', (final.decision_epochs || []).join(' · ')]];
+      default: return [];
+    }
+  }
+
+  /* Обоснования финального прогона: берутся из пакета как есть, без досочинения. */
+  function frozenReasonsFor(id) {
+    const split = {preferred: [], considered: []};
+    if (!SPECIALISTS.has(id)) return split;
+    const epochs = (result.rationale || {}).epochs || [];
+    for (const epoch of epochs) {
+      for (const rec of epoch[id] || []) {
+        const head = [rec.action, rec.direction, rec.intensity].filter((x) => x && x !== 'NONE').join(' ');
+        const wells = (rec.wells || []).length ? ' · скв. ' + rec.wells.slice(0, 4).join(', ') + (rec.wells.length > 4 ? ' …' : '') : '';
+        const bucket = rec.slot === 'considered' ? split.considered : split.preferred;
+        bucket.push(`T${epoch.index} · ${epoch.date} · ${head}${wells}\n${rec.rationale}`);
+      }
+    }
+    return split;
+  }
+
+  function whyBlock(heading, badge, lines, live) {
+    return el('div', {class: 'why' + (live ? ' live' : '')},
+      el('b', {text: badge ? `${heading} · ${badge}` : heading}),
+      ...lines.map((line) => el('p', {text: line})));
+  }
+
+  function renderInspector() {
+    const id = selectedId();
+    const node = G.nodes[id];
+    if (!node) return;
+    const [, kindClass, kindFull] = KIND[node.kind];
+    const kind = $('#insp-kind');
+    kind.textContent = kindFull;
+    kind.className = 'kd ' + kindClass;
+    setText('#insp-title', node.name);
+    setText('#insp-desc', node.desc);
+    const label = NODE_STATE[node.state];
+    setText('#insp-meta', node.started ? `${label} · ${mmss(((node.finished || Date.now()) - node.started) / 1000)}` : label);
+    const factsKey = id + ':' + (result.final ? 1 : 0);
+    const factsList = $('#insp-facts');
+    if (factsList.dataset.key !== factsKey) {
+      factsList.dataset.key = factsKey;
+      factsList.replaceChildren();
+      for (const [term, value] of factsFor(id)) {
+        if (value === null || value === undefined || value === '' || value === '…') continue;
+        factsList.append(el('dt', {text: term}), el('dd', {text: String(value)}));
+      }
+    }
+    setText('#insp-hint', G.mode
+      ? (G.pinned ? 'Узел закреплён, клик ещё раз вернёт слежение за активным.' : 'Слежу за активным узлом. Клик по узлу закрепит его.')
+      : 'Клик по узлу покажет, что он делает и что было в финальном прогоне.');
+    const body = $('#insp-body');
+    const live = node.why.length > 0;
+    /* Замороженное обоснование показывается, только когда узел не идёт живым:
+       смешивать слова прошлого прогона с текущим нельзя. */
+    const showFrozen = !live && SPECIALISTS.has(id) && (!G.mode || node.state === 'frozen');
+    const frozen = showFrozen ? frozenReasonsFor(id) : {preferred: [], considered: []};
+    const frozenCount = frozen.preferred.length + frozen.considered.length;
+    const key = `${id}:${node.lines.length}:${node.why.length}:${node.state}:${showFrozen ? frozenCount + 1 : 0}`;
+    if (body.dataset.key === key) return;
+    const follow = body.dataset.node !== id || body.scrollTop + body.clientHeight >= body.scrollHeight - 30;
+    body.dataset.key = key;
+    body.dataset.node = id;
+    body.replaceChildren();
+    if (live) {
+      /* Живой поток несёт обоснование предложенного намерения. */
+      body.append(whyBlock(PREFERRED_HEADING, BADGE_LIVE,
+        node.why.map((reason) => reason.replace(/^почему( \([^)]*\))?:\s*/, '')), true));
+    } else if (showFrozen) {
+      if (frozen.preferred.length) {
+        body.append(whyBlock(PREFERRED_HEADING, BADGE_FROZEN, frozen.preferred, false));
+      }
+      if (frozen.considered.length) {
+        body.append(whyBlock(CONSIDERED_HEADING, BADGE_FROZEN, frozen.considered, false));
+      }
+      if (!frozenCount) body.append(whyBlock(PREFERRED_HEADING, null, [RATIONALE_ABSENT], false));
+    }
+    if (RULE_WHY[id]) body.append(whyBlock(RULE_HEADING, null, [RULE_WHY[id]], false));
+    if (!node.lines.length) {
+      const empty = {
+        pending: G.mode ? 'Узел ещё не запускался в этом прогоне.' : 'Вывод узла появится во время прогона.',
+        active: 'Узел работает, вывода пока нет.',
+        frozen: 'В сквозном прогоне этот шаг не повторяется: его решения уже записаны в сданные управляющие последовательности.',
+        skip: 'В сквозном прогоне не нужен: ограничения и отбор проверены в финальном прогоне.',
+        done: 'Готово.', fail: 'Ошибка, подробности в полном логе.',
+      }[node.state];
+      body.append(el('span', {class: 'insp-empty', text: empty}));
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const line of node.lines) fragment.append(el('span', {class: line.startsWith('── эпоха') ? 'l-epoch' : lineClass(line)}, line + '\n'));
+    body.append(fragment);
+    if (follow) body.scrollTop = body.scrollHeight;
+  }
+
+  /* ================= результат и окружение ================= */
+  function renderResult(data) {
+    result = data;
+    const final = data.final || {};
+    const compatible = final.organizer_compatible_mln_rub || {};
+    const delta = Number.isFinite(compatible.delta_MAS_ON_vs_MAS_OFF) ? compatible.delta_MAS_ON_vs_MAS_OFF : compatible.B4_MAS_ON - compatible.B3_MAS_OFF;
+    setText('#stat-npv', num(compatible.B4_MAS_ON));
+    setText('#stat-delta', Number.isFinite(delta) ? '+' + num(delta) : '…');
+    setText('#stat-delta-sub', `млн ₽ к детерминированной абляции MAS OFF (${num(compatible.B3_MAS_OFF)})`);
+    setText('#stat-obj', num((final.ai_period_objective_mln_rub || {}).B4_MAS_ON));
+    setText('#stat-guard', `${num((final.guardian || {}).committed_failures, nf0)} / ${num((final.guardian || {}).committed_checks, nf0)}`);
+    setText('#float-delta', Number.isFinite(delta) ? `+${num(delta)} млн ₽` : '…');
+    const epochs = data.epochs || [];
+    const live = epochs.filter((epoch) => !epoch.floor).length;
+    if (epochs.length) {
+      setText('#stat-note', 'Это наш собственный воспроизведённый результат, а не итог ранжирования организаторов. '
+        + `Эпох решения: ${epochs.length}; живой моделью ${live}` + (epochs.length - live ? `, детерминированным полом ${epochs.length - live}.` : '.'));
+    }
+    if ((data.reproducibility || {}).simulator_image) setText('#cmd-image', data.reproducibility.simulator_image);
+    scheduleUpdate();
+  }
+
+  function renderStatus(data) {
+    status = data;
+    const box = $('#checks');
+    box.replaceChildren();
+    for (const check of data.checks) {
+      box.append(el('div', {class: 'check'}, el('span', {class: 'dot ' + check.state}), el('div', {}, el('h4', {text: check.title}), el('p', {text: check.detail}))));
+    }
+    const core = ['model_y', 'chdd', 'docker'].every((key) => data.ready[key]);
+    const pill = $('#env-pill');
+    pill.querySelector('.dot').className = 'dot ' + (core ? 'ok' : 'warn');
+    pill.lastElementChild.textContent = core ? 'Окружение готово' : 'Нужна настройка';
+    renderButtons();
+  }
+
+  async function refreshStatus() {
+    setText('#recheck', 'Проверяю…');
+    try { renderStatus(await api('/api/status')); } catch (_) { /* сервер недоступен */ }
+    setText('#recheck', 'Проверить снова');
+  }
+
+  const taskById = (id) => tasks.find((task) => task.id === id);
+  const missingFor = (task) => (status && task ? task.requires.filter((key) => !status.ready[key]) : []);
+
+  function renderButtons() {
+    const busy = active && active.status === 'running';
+    for (const [selector, id] of [['#run-verify', 'verify-submission'], ['#run-mas', 'mas-benchmark']]) {
+      const button = $(selector);
+      const task = taskById(id);
+      const missing = missingFor(task);
+      button.disabled = !status || !task || busy || missing.length > 0;
+      button.title = missing.length ? 'Не хватает: ' + missing.join(', ') : '';
+    }
+    const tech = $('#tech-buttons');
+    tech.replaceChildren();
+    for (const id of ['check', 'validation-demo']) {
+      const task = taskById(id);
+      if (!task) continue;
+      const button = el('button', {class: 'btn btn-ghost btn-sm', type: 'button'}, task.title);
+      button.disabled = !status || busy || missingFor(task).length > 0;
+      button.addEventListener('click', () => startRun(task));
+      tech.append(button);
+    }
+  }
+
+  /* ================= прогон ================= */
+  function lineClass(line) {
+    const text = line.trim();
+    if (/^(ВЕРДИКТ|VERDICT)/.test(text)) return 'l-verdict';
+    if (/НЕ СОВПАДАЕТ|НЕ ПРОВЕРЕНО|BLOCKED|Traceback|Error\b|\bFAIL(ED)?\b|\bfailed\b/.test(text)) return 'l-fail';
+    if (/СОВПАДАЕТ|совпадает|READY|\bPASS\b|\bpassed\b/.test(text)) return 'l-ok';
+    if (/^(AIOS TRACK|=+$|-+$)/.test(text)) return 'l-dim';
+    return null;
+  }
+
+  function appendRaw(lines) {
+    if (!lines.length) return;
+    const body = $('#console-body');
+    if (!rawCount) body.replaceChildren();
+    const follow = body.scrollTop + body.clientHeight >= body.scrollHeight - 32;
+    const fragment = document.createDocumentFragment();
+    for (const line of lines) fragment.append(el('span', {class: lineClass(line)}, line + '\n'));
+    body.append(fragment);
+    rawCount += lines.length;
+    setText('#rawlog-count', `· ${nf0.format(rawCount)} строк`);
+    if (follow) body.scrollTop = body.scrollHeight;
+  }
+
+  function feed(lines) {
+    const shown = [];
+    for (const line of lines) if (ingest(line)) shown.push(line);
+    appendRaw(shown);
+    scheduleUpdate();
+  }
+
+  function startClock(run) {
+    clearInterval(clock);
+    const origin = Date.now() - run.elapsed_seconds * 1000;
+    const paint = () => { setText('#rv-elapsed', mmss((Date.now() - origin) / 1000)); scheduleUpdate(); };
+    paint();
+    if (run.status === 'running') clock = setInterval(paint, 1000);
+  }
+
+  function paintState(run) {
+    $('#rv-dot').className = 'dot ' + (RUN_DOT[run.status] || 'idle');
+    setText('#rv-state', `${run.title}: ${RUN_STATE[run.status] || run.status}`);
+    $('#rv-stop').hidden = run.status !== 'running';
+    if (run.status !== 'running') { clearInterval(clock); setText('#rv-elapsed', mmss(run.elapsed_seconds)); }
+  }
+
+  function showVerdict(run) {
+    const bar = $('#verdict');
+    if (!run || run.status === 'running') { bar.className = 'verdict-bar'; bar.textContent = ''; return; }
+    let kind = 'fail';
+    let text = `Завершилось с ошибкой (код ${run.exit_code}), подробности в выводе узла и полном логе`;
+    if (run.status === 'stopped') { kind = 'warn'; text = 'Прогон остановлен'; }
+    else {
+      const verdicts = (MODES[run.task_id] || TECH[run.task_id] || {}).verdicts || {};
+      const known = verdicts[run.exit_code];
+      if (known) [kind, text] = known;
+      else if (run.exit_code === 0) { kind = 'ok'; text = 'Готово'; }
+    }
+    bar.className = 'verdict-bar ' + kind;
+    bar.textContent = text;
+  }
+
+  function attach(run) {
+    active = run;
+    since = 0;
+    rawCount = 0;
+    $('#console-body').replaceChildren(el('span', {class: 'l-dim'}, 'Жду вывода…'));
+    setText('#rawlog-count', '');
+    const mode = MODES[run.task_id] || null;
+    resetGraph(mode);
+    $('#rawlog').open = !mode;
+    showVerdict(run);
+    paintState(run);
+    startClock(run);
+    renderButtons();
+    poll();
+  }
+
+  async function poll() {
+    clearTimeout(pollTimer);
+    if (!active) return;
+    const runId = active.run_id;
+    try {
+      const {run} = await api(`/api/runs/${runId}?since=${since}`);
+      if (!active || active.run_id !== runId) return;
+      feed(run.lines);
+      since = run.next;
+      active = run;
+      paintState(run);
+      if (run.status === 'running') { pollTimer = setTimeout(poll, 700); return; }
+      finishGraph(run);
+      showVerdict(run);
+      renderButtons();
+    } catch (_) {
+      pollTimer = setTimeout(poll, 2000);
+    }
+  }
+
+  async function startRun(task) {
+    if (!task) return;
+    if (task.confirm && !window.confirm(task.confirm)) return;
+    try {
+      const {run} = await post(`/api/tasks/${encodeURIComponent(task.id)}/run`);
+      attach(run);
+      $('#loop').scrollIntoView({behavior: 'smooth', block: 'start'});
+    } catch (error) {
+      const bar = $('#verdict');
+      bar.className = 'verdict-bar fail';
+      bar.textContent = error.status === 409 ? 'Уже идёт другой прогон, дождитесь окончания или остановите его.' : `Не удалось запустить: ${error.message}`;
+    }
+  }
+
+  $('#run-verify').addEventListener('click', () => startRun(taskById('verify-submission')));
+  $('#run-mas').addEventListener('click', () => startRun(taskById('mas-benchmark')));
+  $('#rv-stop').addEventListener('click', async () => {
+    if (!active) return;
+    try { await post(`/api/runs/${active.run_id}/stop`); } catch (_) { /* уже завершился */ }
+  });
+  $('#recheck').addEventListener('click', refreshStatus);
+  $('#hero-run').addEventListener('click', () => {
+    const button = $('#run-verify');
+    setTimeout(() => { button.classList.remove('flash'); void button.offsetWidth; button.classList.add('flash'); }, 450);
+  });
+  window.addEventListener('resize', scheduleUpdate);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleUpdate);
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelectorAll('animateMotion').forEach((node) => node.remove());
+
+  async function boot() {
+    buildGraph();
+    resetGraph(null);
+    try {
+      const [taskList, data, current] = await Promise.all([api('/api/tasks'), api('/api/result'), api('/api/runs/current')]);
+      tasks = taskList.tasks;
+      renderResult(data);
+      renderButtons();
+      if (current.run) attach(current.run);
+    } catch (_) {
+      $('#offline').hidden = false;
+      return;
+    }
+    refreshStatus();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

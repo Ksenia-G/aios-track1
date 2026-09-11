@@ -1,0 +1,284 @@
+{
+  "schema": "aios.ui.frozen_rationale/1.0.0",
+  "variant": "B4_MAS_ON",
+  "note": "Обоснования записаны самими специалистами в замороженном прогоне MAS. Текст перенесён дословно; ничего не досочинено и не пересказано.",
+  "source": {
+    "artifact": "benchmark_summary.json",
+    "artifact_sha256": "afb08b010b8679d3ab114a7417c932ab48e57425c93c26855ff277c99e425c3c",
+    "committed_candidate_digest": "9ec365f98c0544ac7c345d7e50123fa6c95d75d86f39fcb1de71fdb623124c33",
+    "manifest_digest": "a7b77abf5e34ebf823edc2f6c1b69ee17123b1b04ccebc703ace7e360d4dc995",
+    "binds_to": "submission_evidence/reproducibility.json"
+  },
+  "epochs": [
+    {
+      "index": 0,
+      "date": "2014-01-01",
+      "production": [
+        {
+          "slot": "preferred",
+          "action": "INCREASE_OFFTAKE",
+          "direction": "UP",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "production.state.constraints",
+            "production.state.well:25",
+            "production.state.well:27",
+            "production.state.well:30",
+            "production.state.well:33",
+            "production.state.well:40",
+            "production.state.well:44",
+            "production.state.well:45",
+            "production.state.well:48"
+          ],
+          "rationale": "These producers retain drawdown headroom and show comparatively favorable oil contribution. Selective uplift tests incremental production without extending the claim to weak or constrained producers."
+        },
+        {
+          "slot": "considered",
+          "action": "REDUCE_OFFTAKE",
+          "direction": "DOWN",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.sweep.2014-01-01",
+            "production.state.well:1",
+            "production.state.well:12",
+            "production.state.well:16",
+            "production.state.well:20",
+            "production.state.well:3",
+            "production.state.well:35",
+            "production.state.well:38",
+            "production.state.well:43",
+            "production.state.well:49",
+            "production.state.well:51",
+            "production.state.well:52",
+            "production.state.well:53",
+            "production.state.well:55",
+            "production.state.well:6"
+          ],
+          "rationale": "The sweep diagnostic identifies high-water, low-oil-efficiency production, corroborated by these producer states. Selective reduction tests water-risk relief while retaining stronger producers."
+        }
+      ],
+      "injection": [
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [
+            "2"
+          ],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-01-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-01-01"
+          ],
+          "rationale": "Shift support toward the injector with headroom while retaining pressure support within the same compartment."
+        },
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [
+            "3"
+          ],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-01-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-01-01"
+          ],
+          "rationale": "Rebalance excess realized injection toward the injector with headroom in the same pressure-sensitive compartment."
+        },
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [
+            "5"
+          ],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-01-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-01-01"
+          ],
+          "rationale": "Redistribute support from donor-like injectors to injectors with headroom without increasing compartment total."
+        },
+        {
+          "slot": "considered",
+          "action": "SUPPORT_REGION",
+          "direction": "UP",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-01-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-01-01"
+          ],
+          "rationale": "Increase targeted support through injectors with identified headroom around weak producers, cautiously because produced-water risk is widespread."
+        },
+        {
+          "slot": "considered",
+          "action": "REDUCE_SUPPORT_PATH",
+          "direction": "DOWN",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [
+            "4"
+          ],
+          "evidence_ids": [
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-01-01",
+            "diagnostic.sweep.2014-01-01"
+          ],
+          "rationale": "Trim donor-like support in the compartment showing excess surface support and water-risk producers, while accounting for uncertain pairwise connectivity."
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "date": "2014-09-01",
+      "production": [
+        {
+          "slot": "preferred",
+          "action": "REDUCE_OFFTAKE",
+          "direction": "DOWN",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.sweep.2014-09-01",
+            "production.state.well:1",
+            "production.state.well:12",
+            "production.state.well:20",
+            "production.state.well:35",
+            "production.state.well:38",
+            "production.state.well:43",
+            "production.state.well:51",
+            "production.state.well:52",
+            "production.state.well:53",
+            "production.state.well:55"
+          ],
+          "rationale": "These producers combine high produced-water risk with low oil efficiency. Selective reduction tests whether avoidable water handling can be curtailed."
+        },
+        {
+          "slot": "considered",
+          "action": "INCREASE_OFFTAKE",
+          "direction": "UP",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-09-01",
+            "production.state.constraints",
+            "production.state.well:54",
+            "production.state.well:56"
+          ],
+          "rationale": "These pressure-support candidates retain comparatively favorable oil contribution despite being simulator-limited by the pressure floor. Higher requested offtake can test upside without overriding simulator constraints."
+        },
+        {
+          "slot": "considered",
+          "action": "SHUT_IN",
+          "direction": "NONE",
+          "intensity": "NONE",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.sweep.2014-09-01",
+            "production.state.well:1"
+          ],
+          "rationale": "The producer is delivering water without realized oil, making isolation a distinct water-risk strategy."
+        }
+      ],
+      "injection": [
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [
+            "3"
+          ],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-09-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-09-01"
+          ],
+          "rationale": "Shift support from higher-realized injectors toward injectors with headroom in the same under-supported compartment."
+        },
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "MODERATE",
+          "wells": [],
+          "scope": [
+            "5"
+          ],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-09-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-09-01"
+          ],
+          "rationale": "Redistribute injection toward headroom-bearing injectors while retaining total support within the same compartment."
+        },
+        {
+          "slot": "preferred",
+          "action": "REALLOCATE_INJECTION",
+          "direction": "NONE",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [
+            "2"
+          ],
+          "evidence_ids": [
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-09-01"
+          ],
+          "rationale": "Use available injector headroom to improve internal support balance without changing compartment allocation."
+        },
+        {
+          "slot": "considered",
+          "action": "SUPPORT_REGION",
+          "direction": "UP",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-09-01",
+            "diagnostic.support_connectivity",
+            "diagnostic.support_imbalance.2014-09-01"
+          ],
+          "rationale": "Add targeted support through injectors with headroom in pressure-deficient, comparatively under-supported compartments."
+        },
+        {
+          "slot": "considered",
+          "action": "SCALE_TOTAL_INJECTION",
+          "direction": "UP",
+          "intensity": "SMALL",
+          "wells": [],
+          "scope": [],
+          "evidence_ids": [
+            "diagnostic.pressure.2014-09-01",
+            "diagnostic.support_imbalance.2014-09-01"
+          ],
+          "rationale": "A cautious field-wide increase could counter declining pressure, but widespread water risk makes targeted balancing preferable."
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "date": "2015-04-01",
+      "production": [],
+      "injection": []
+    }
+  ]
+}

@@ -57,6 +57,7 @@ from aios.mas.orchestration.economics import build_economic_context
 from aios.mas.specialists.injection import InjectionController
 from aios.mas.specialists.injection.scope import groundable_injection_actions
 from aios.mas.specialists.production import ProductionController
+from aios.ui.events import emit_event, events_enabled
 
 #: Действия, доступные специалистам в бенчмарке. Одинаковы для OFF и ON.
 #:
@@ -96,7 +97,22 @@ class _EnvelopeCapturingArbiter:
 
     def decide(self, envelope: ArbiterEnvelope):
         self.last_envelope = envelope
-        return self.inner.decide(envelope)
+        emit_event("arbiter", "active")
+        decision = self.inner.decide(envelope)
+        emit_event("arbiter", "done", text=f"структурных бандлов: {len(decision.bundles)}")
+        kinds: dict[str, int] = {}
+        for bundle in decision.bundles:
+            kinds[_value(bundle.kind)] = kinds.get(_value(bundle.kind), 0) + 1
+        emit_event(
+            "arbiter",
+            text=(
+                "почему: пол HOLD + DETERMINISTIC_BASELINE всегда в наборе, остальное это "
+                "гипотезы специалистов в пределах бюджета · "
+                + ", ".join(f"{kind} ×{count}" for kind, count in kinds.items())
+            ),
+            why=True,
+        )
+        return decision
 
 
 @dataclass
@@ -124,9 +140,19 @@ class _ContextualMagnitudeResolver:
             baseline_producers=self.baseline_producers,
             baseline_injectors=self.baseline_injectors,
         )
+        emit_event("resolver", "active")
         engine = DeterministicMagnitudeResolver(context=context)
         candidates = engine.resolve(decision)
         self.funnel.append({"effective_date": str(self.effective_date), **engine.last_funnel})
+        funnel = engine.last_funnel
+        emit_event(
+            "resolver",
+            "done",
+            text=(
+                f"кандидатов на физику: {len(candidates)} "
+                f"(сгенерировано {funnel.get('virtual_candidates_generated', '—')})"
+            ),
+        )
         return candidates
 
 
@@ -270,7 +296,221 @@ def _committed_action_controls(runtime, candidate):
     )
 
 
-def _run_decision_steps(orchestrator, resolver, runtime, step_input, epochs):
+# ---------------------------------------------------------------------------
+# Граф страницы запуска
+#
+# Страница запуска показывает, какой узел контура работает сейчас и что он
+# выдал. Для этого вызовы специалистов и границ размечаются строками
+# `::aios {...}` (см. `aios.ui.events`). Разметка печатается, только если
+# процесс запустила страница; без неё `_announced*` возвращают те же самые
+# объекты, и контур собирается ровно так же, как раньше. Решения обёртки не
+# трогают: каждый вызов уходит в настоящий объект, а обёртка только сообщает
+# о его начале, конце и результате.
+#
+# Методы объявлены явно, а не через `__getattr__`: протоколы границ помечены
+# `@runtime_checkable`, а в Python 3.12 такая проверка ищет методы статически.
+# ---------------------------------------------------------------------------
+
+
+def _value(item: object) -> str:
+    return str(getattr(item, "value", item))
+
+
+def _proposal_text(output: object) -> str | None:
+    """Коротко: что предложил специалист и откуда это решение."""
+    proposal = getattr(output, "primary_proposal", None)
+    if proposal is None:
+        return None
+    parts = []
+    for intent in getattr(proposal, "intents", ()):
+        if _value(intent.action) == "HOLD":
+            parts.append("HOLD")
+            continue
+        wells = [str(well) for well in (getattr(intent, "target_wells", ()) or ())]
+        scope = ""
+        if wells:
+            scope = " · скв. " + ", ".join(wells[:4]) + (" …" if len(wells) > 4 else "")
+        parts.append(
+            f"{_value(intent.action)} {_value(intent.direction)} {_value(intent.intensity)}{scope}"
+        )
+    provenance = getattr(proposal, "provenance", None)
+    if getattr(provenance, "fallback_used", False):
+        origin = "детерминированный пол"
+    else:
+        origin = _value(getattr(proposal, "source", ""))
+    alternatives = len(getattr(output, "alternatives", ()) or ())
+    extra = f" · альтернатив: {alternatives}" if alternatives else ""
+    return f"{'; '.join(parts) or 'HOLD'} ({origin}){extra}"
+
+
+def _violations_text(report: object) -> str:
+    violations = getattr(report, "violations", None)
+    if violations is None:
+        return "проверено"
+    return "без нарушений" if not violations else f"нарушений: {len(violations)}"
+
+
+def _proposal_reasons(output: object) -> list[str]:
+    """Почему специалист предложил именно это -- его собственными словами.
+
+    Ничего не выводится заново: `rationale_short` и `evidence_ids` обязательны
+    для не-HOLD намерения и уже прошли проверку grounding, отклонённые
+    альтернативы записал сам специалист.
+    """
+    proposal = getattr(output, "primary_proposal", None)
+    if proposal is None:
+        return []
+    reasons: list[str] = []
+    provenance = getattr(proposal, "provenance", None)
+    if getattr(provenance, "fallback_used", False):
+        cause = getattr(provenance, "fallback_reason", None) or "ответ модели не прошёл проверку"
+        reasons.append(f"почему: сработал детерминированный пол, {cause}")
+    for intent in getattr(proposal, "intents", ()):
+        rationale = (getattr(intent, "rationale_short", "") or "").strip()
+        if rationale:
+            reasons.append(f"почему ({_value(intent.action)}): {rationale}")
+        evidence = [str(item) for item in (getattr(intent, "evidence_ids", ()) or ())]
+        if evidence:
+            reasons.append("опирается на: " + ", ".join(evidence))
+    audit = getattr(proposal, "audit", None)
+    declined = [str(item) for item in (getattr(audit, "declined_alternatives", ()) or ())]
+    if declined:
+        tail = " …" if len(declined) > 4 else ""
+        reasons.append("рассмотрено и отклонено: " + "; ".join(declined[:4]) + tail)
+    return reasons
+
+
+def _identity(candidate: object) -> object:
+    identity = getattr(candidate, "digest", None)
+    return identity() if callable(identity) else id(candidate)
+
+
+class _Forwarding:
+    """Всё, что не размечается, берётся у настоящего объекта."""
+
+    def __init__(self, inner: object) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._inner, name)
+
+
+class _AnnouncedAgent(_Forwarding):
+    def __init__(self, inner: object, node: str) -> None:
+        super().__init__(inner)
+        self._node = node
+
+    def propose(self, envelope):
+        emit_event(self._node, "active")
+        try:
+            output = self._inner.propose(envelope)
+        except Exception:
+            emit_event(self._node, "fail")
+            raise
+        emit_event(self._node, "done", text=_proposal_text(output))
+        for reason in _proposal_reasons(output):
+            emit_event(self._node, text=reason, why=True)
+        return output
+
+
+class _AnnouncedExecutor(_Forwarding):
+    def execute(self, candidate, *, run_label):
+        emit_event("opm", "active", text=f"кандидат {_value(candidate.candidate_kind)}")
+        try:
+            execution = self._inner.execute(candidate, run_label=run_label)
+        except Exception:
+            emit_event("opm", "fail")
+            raise
+        emit_event("opm", "done", text=f"прогон: {_value(execution.result.status)}")
+        return execution
+
+
+class _AnnouncedGuardian(_Forwarding):
+    def evaluate(self, state_card):
+        emit_event("guardian", "active")
+        report = self._inner.evaluate(state_card)
+        emit_event("guardian", "done", text=_violations_text(report))
+        return report
+
+
+class _AnnouncedTrajectoryGuardian(_Forwarding):
+    def evaluate(self, candidate, execution, *, final_state):
+        emit_event("guardian", "active")
+        report = self._inner.evaluate(candidate, execution, final_state=final_state)
+        emit_event("guardian", "done", text="траектория: " + _violations_text(report))
+        return report
+
+
+class _AnnouncedChdd(_Forwarding):
+    def __init__(self, inner: object, ledger: dict) -> None:
+        super().__init__(inner)
+        self._ledger = ledger
+
+    def evaluate(self, candidate, execution):
+        emit_event("chdd", "active")
+        evaluation = self._inner.evaluate(candidate, execution)
+        npv = evaluation.result.npv_mln_rub
+        self._ledger[_identity(candidate)] = npv
+        emit_event("chdd", "done", text=f"ЧДД {npv:.2f} млн ₽")
+        return evaluation
+
+
+class _AnnouncedAdvancer(_Forwarding):
+    def __init__(self, inner: object, ledger: dict) -> None:
+        super().__init__(inner)
+        self._ledger = ledger
+
+    def advance(self, state, candidate, execution):
+        emit_event("selector", "active")
+        next_state = self._inner.advance(state, candidate, execution)
+        emit_event("selector", "done", text=f"закоммичен: {_value(candidate.candidate_kind)}")
+        chosen = self._ledger.get(_identity(candidate))
+        if chosen is not None:
+            emit_event(
+                "selector",
+                text=(
+                    f"почему: максимальный ЧДД {chosen:.2f} млн ₽ среди {len(self._ledger)} "
+                    "посчитанных кандидатов эпохи; к отбору допускаются только прошедшие Guardian"
+                ),
+                why=True,
+            )
+        self._ledger.clear()
+        return next_state
+
+
+def _announced(agent: object, node: str) -> object:
+    """Специалист, видимый на графе, -- или он же, если страницы нет."""
+    return _AnnouncedAgent(agent, node) if events_enabled() else agent
+
+
+def _announced_boundaries(boundaries: Mapping[str, object]) -> Mapping[str, object]:
+    """Границы, видимые на графе, -- или те же самые, если страницы нет."""
+    if not events_enabled():
+        return boundaries
+    # Общий журнал ЧДД эпохи: по нему отбор объясняет, почему победил именно
+    # закоммиченный кандидат. Числа берутся из того, что уже посчитал CHDD.
+    ledger: dict = {}
+    wrapped = dict(boundaries)
+    wrapped["candidate_executor"] = _AnnouncedExecutor(boundaries["candidate_executor"])
+    wrapped["guardian"] = _AnnouncedGuardian(boundaries["guardian"])
+    if boundaries.get("trajectory_guardian") is not None:
+        wrapped["trajectory_guardian"] = _AnnouncedTrajectoryGuardian(
+            boundaries["trajectory_guardian"]
+        )
+    wrapped["chdd"] = _AnnouncedChdd(boundaries["chdd"], ledger)
+    wrapped["state_advancer"] = _AnnouncedAdvancer(boundaries["state_advancer"], ledger)
+    return wrapped
+
+
+def _announce_epoch(label: str, index: int, epoch) -> None:
+    """Начало эпохи: состояние снято, диагностика собрана до специалистов."""
+    prefix = f"{label} · " if label else ""
+    emit_event(epoch=f"{prefix}T{index} · {epoch.isoformat()}")
+    emit_event("state", "done", text=f"состояние на {epoch.isoformat()}")
+    emit_event("diag", "done", text="давление, охват, связность, экономика")
+
+
+def _run_decision_steps(orchestrator, resolver, runtime, step_input, epochs, *, label=""):
     """Receding-horizon цикл эпох: когнитивный и физический слой идут вместе.
 
     На каждой эпохе кандидат компилируется как ОДНО полное расписание окна --
@@ -283,6 +523,7 @@ def _run_decision_steps(orchestrator, resolver, runtime, step_input, epochs):
     current = step_input
     history = CommittedHistory()
     for index, epoch in enumerate(epochs):
+        _announce_epoch(label, index, epoch)
         resolver.effective_date = epoch
         runtime.advance_to_epoch(history, require_history_before=epoch if index else None)
         result = orchestrator.run_decision_step(current)
@@ -389,23 +630,27 @@ def run_mas_variant(
         config=config,
         # Флаг доходит до специалистов через фабрику: топология одна и та же,
         # различается только когнитивная ветка внутри специалиста.
-        production_agent_factory=lambda enabled: ProductionController(
-            llm_enabled=enabled, provider=production_provider
+        production_agent_factory=lambda enabled: _announced(
+            ProductionController(llm_enabled=enabled, provider=production_provider),
+            "production",
         ),
         # InjectionController's llm_source is a static constructor knob (the
         # LlmProvider protocol returns bare text, so it cannot carry its own
         # provenance); the live adapter declares its provenance via `.source`
         # (see InjectionLiveProvider), so read it here rather than defaulting
         # a real live completion to the LLM_LOCAL fallback value.
-        injection_agent_factory=lambda enabled: InjectionController(
-            llm_enabled=enabled,
-            llm_provider=injection_provider,
-            llm_source=getattr(injection_provider, "source", ProposalSource.LLM_LOCAL),
+        injection_agent_factory=lambda enabled: _announced(
+            InjectionController(
+                llm_enabled=enabled,
+                llm_provider=injection_provider,
+                llm_source=getattr(injection_provider, "source", ProposalSource.LLM_LOCAL),
+            ),
+            "injection",
         ),
         arbiter=arbiter,
         magnitude_resolver=resolver,
         decision_trace=trace,
-        **composition.boundaries(),
+        **_announced_boundaries(composition.boundaries()),
     )
 
     diagnostics = _diagnostics(initial_state_card)
@@ -427,7 +672,9 @@ def run_mas_variant(
         **diagnostics,
     )
 
-    results = _run_decision_steps(orchestrator, resolver, composition.runtime, step_input, epochs)
+    results = _run_decision_steps(
+        orchestrator, resolver, composition.runtime, step_input, epochs, label=variant_id
+    )
     final = results[-1]
     selected = final.selection.selected
 

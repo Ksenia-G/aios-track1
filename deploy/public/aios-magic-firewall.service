@@ -1,0 +1,12 @@
+[Unit]
+Description=Изоляция сети страницы AIOS magic от хоста и других сайтов
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/srv/aios-magic/firewall.sh
+
+[Install]
+WantedBy=multi-user.target

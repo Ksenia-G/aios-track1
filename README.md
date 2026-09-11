@@ -212,13 +212,17 @@ cp .env.example .env
 Живые команды (нужны Docker и внешние материалы):
 
 ```bash
+mise run ui                # страница запуска в браузере: готовность, результат, кнопки проверок
 mise run validation-demo   # сквозной прогон опорной политики и пакет сабмишена
+mise run verify            # пересчёт сданного ЧДД, как у организаторов; ход печатается сразу
+mise run progress          # ход идущего прогона OPM в соседней вкладке
 ```
 
 ## Проверка
 
 ```
-mise run check       1779 passed, 76 skipped, 0 failed
+mise run check       1831 passed, 76 skipped, 0 failed   (эта ветка;
+                     на замороженном main -- 1779, разницу дают тесты страницы)
 
 mise run validation-demo
   Schedule    PASS

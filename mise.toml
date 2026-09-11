@@ -40,6 +40,21 @@ description = "КТ1: проверенный снимок эксперимент
 env = { PYTHONPATH = "src" }
 run = "uv run python -m aios.demo"
 
+[tasks.ui]
+description = "Страница запуска в браузере: готовность окружения, результат, запуск проверок"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.ui"
+
+[tasks.verify]
+description = "Пересчёт сданного ЧДД так же, как это сделают организаторы"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.ui.verify"
+
+[tasks.progress]
+description = "Ход идущего прогона OPM по его журналу (в соседней вкладке)"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.ui.progress"
+
 [tasks.check]
 run = """
 uv run ruff format --check .
