@@ -79,11 +79,15 @@ def _producer_line(control: ProducerControl) -> str:
 
 
 def _injector_line(control: InjectorControl) -> str:
+    # У WCONINJE режим управления обязателен даже для закрытой скважины: OPM
+    # отвергает колоду с `Unknown control mode string`, тогда как WCONPROD
+    # дефолтный режим принимает. Величина у закрытой скважины по-прежнему не
+    # печатается, поэтому уставка мимо MagnitudeResolver не появляется.
     fields = [
         f"'{control.well}'",
         f"'{control.phase}'",
         f"'{control.status}'",
-        _control_mode_field(control.mode, control.surface_rate),
+        f"'{control.mode}'",
         format_number(control.surface_rate),
         DEFAULTED,
         format_number(control.bhp_limit),
@@ -97,8 +101,28 @@ def _dates_block(day: date) -> list[str]:
     return ["DATES", f" {format_deck_date(day)} /", "/"]
 
 
+_WELOPEN_HEADER = "-- well status"
+
+
+def _welopen_lines(step: ScheduleStep) -> list[str]:
+    """Доступность скважин на эту дату.
+
+    `WELOPEN` идёт до управляющих ключевых слов: сначала скважина закрывается
+    или открывается, и лишь потом ей задаётся режим. Величины здесь нет -- это
+    единственный способ выразить обязательный ремонт, не выдумав уставку.
+    """
+    if not step.shut_wells and not step.opened_wells:
+        return []
+    lines = ["WELOPEN", _WELOPEN_HEADER]
+    lines.extend(f" '{well}' 'OPEN' /" for well in step.opened_wells)
+    lines.extend(f" '{well}' 'SHUT' /" for well in step.shut_wells)
+    lines.append("/")
+    return lines
+
+
 def _step_lines(step: ScheduleStep) -> list[str]:
     lines = _dates_block(step.date)
+    lines.extend(_welopen_lines(step))
     if step.producers:
         lines.append("WCONPROD")
         lines.append(_PRODUCER_HEADER)

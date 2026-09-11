@@ -448,6 +448,36 @@ def mini_case(mini_case_dir: Path):
     return load_case(mini_case_dir / "case.json")
 
 
+# --- синтетический кейс нового окна 2012-2018 -------------------------------
+
+
+@pytest.fixture
+def newcase_window_case(tmp_path: Path):
+    """Кейс с окном нового кейса и синтетической колодой рядом.
+
+    Внешние материалы организаторов для этого не нужны: тестам новой машинерии
+    от кейса нужны только границы окна, поэтому колода берётся та же
+    синтетическая, что и у `mini_case`, а пути остаются относительными.
+    """
+    from aios.cases import load_case
+
+    deck = tmp_path / "deck"
+    (deck / "INCLUDE").mkdir(parents=True)
+    (deck / "MINI.DATA").write_text(MINI_DATA_DECK, encoding="utf-8")
+    (deck / "INCLUDE" / "SCH.INC").write_text(MINI_SCHEDULE, encoding="utf-8")
+    (deck / "INCLUDE" / "PHYSICS.INC").write_text(MINI_PHYSICS, encoding="utf-8")
+
+    payload = mini_case_payload()
+    payload["case_id"] = "field_y_2012_2018_synthetic"
+    payload["management_start_date"] = "2012-01-01"
+    payload["management_end_date"] = "2018-12-01"
+    payload["economics"]["economic_start_date"] = "2012-01-01"
+    (tmp_path / "case.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return load_case(tmp_path / "case.json")
+
+
 # --- опорный кейс Model Y --------------------------------------------------
 
 

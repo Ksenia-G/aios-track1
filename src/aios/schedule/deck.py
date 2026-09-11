@@ -210,6 +210,25 @@ def parse_producer_record(record: DeckRecord) -> ProducerControl:
     )
 
 
+def parse_welopen_record(record: DeckRecord) -> tuple[str, str]:
+    """`WELOPEN`: well status [ ... ].
+
+    Величины у WELOPEN нет: ключевое слово выражает только доступность
+    скважины. Всё, что идёт после статуса -- адресация соединений, и к
+    управлению она отношения не имеет.
+    """
+    well = record.text(0)
+    if not well:
+        raise DeckParseError(f"line {record.line + 1}: WELOPEN record without a well name")
+    raw = record.text(1)
+    if not raw:
+        raise DeckParseError(f"line {record.line + 1}: WELOPEN record without a status")
+    status = raw.upper()
+    if status not in ("OPEN", "SHUT", "STOP", "AUTO"):
+        raise DeckParseError(f"line {record.line + 1}: WELOPEN unsupported status {status!r}")
+    return well, status
+
+
 def parse_injector_record(record: DeckRecord) -> InjectorControl:
     """`WCONINJE`: well phase status control RATE RESV BHP THP VFP."""
 
@@ -283,6 +302,15 @@ class DeckSchedule:
                     ScheduleStep(
                         block_date,
                         injectors=tuple(parse_injector_record(r) for r in block.records),
+                    )
+                )
+            elif block.keyword == "WELOPEN":
+                parsed = [parse_welopen_record(r) for r in block.records]
+                steps.append(
+                    ScheduleStep(
+                        block_date,
+                        shut_wells=tuple(w for w, s in parsed if s in ("SHUT", "STOP")),
+                        opened_wells=tuple(w for w, s in parsed if s in ("OPEN", "AUTO")),
                     )
                 )
             else:

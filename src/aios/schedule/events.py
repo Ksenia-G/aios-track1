@@ -97,10 +97,20 @@ class ScheduleStep:
     date: date
     producers: tuple[ProducerControl, ...] = ()
     injectors: tuple[InjectorControl, ...] = ()
+    #: Доступность скважины, выраженная `WELOPEN`. Это не управление: величины
+    #: здесь нет и быть не может, поэтому уставка мимо MagnitudeResolver не
+    #: проходит. Пустые кортежи -- прежнее поведение слово в слово.
+    shut_wells: tuple[str, ...] = ()
+    opened_wells: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
-        return not self.producers and not self.injectors
+        return (
+            not self.producers
+            and not self.injectors
+            and not self.shut_wells
+            and not self.opened_wells
+        )
 
     def canonical(self) -> "ScheduleStep":
         """Убрать дословные повторы и упорядочить скважины.
@@ -120,6 +130,8 @@ class ScheduleStep:
             injectors=tuple(
                 sorted(dict.fromkeys(self.injectors), key=lambda c: natural_key(c.well))
             ),
+            shut_wells=tuple(sorted(dict.fromkeys(self.shut_wells), key=natural_key)),
+            opened_wells=tuple(sorted(dict.fromkeys(self.opened_wells), key=natural_key)),
         )
 
 
@@ -151,17 +163,28 @@ class Schedule:
 def build_schedule(steps: Iterable[ScheduleStep]) -> Schedule:
     """Собрать расписание, объединив управления, попавшие на одну дату."""
 
-    merged: dict[date, tuple[list[ProducerControl], list[InjectorControl]]] = {}
+    merged: dict[
+        date, tuple[list[ProducerControl], list[InjectorControl], list[str], list[str]]
+    ] = {}
     order: list[date] = []
     for step in steps:
         if step.date not in merged:
-            merged[step.date] = ([], [])
+            merged[step.date] = ([], [], [], [])
             order.append(step.date)
-        producers, injectors = merged[step.date]
+        producers, injectors, shut, opened = merged[step.date]
         producers.extend(step.producers)
         injectors.extend(step.injectors)
+        shut.extend(step.shut_wells)
+        opened.extend(step.opened_wells)
     return Schedule(
         tuple(
-            ScheduleStep(day, tuple(merged[day][0]), tuple(merged[day][1])) for day in sorted(order)
+            ScheduleStep(
+                day,
+                tuple(merged[day][0]),
+                tuple(merged[day][1]),
+                shut_wells=tuple(merged[day][2]),
+                opened_wells=tuple(merged[day][3]),
+            )
+            for day in sorted(order)
         )
     )

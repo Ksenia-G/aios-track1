@@ -147,10 +147,20 @@ def test_ordinary_open_controls_pass_validation() -> None:
 # --- SHUT-инжектор ---------------------------------------------------------
 
 
-def test_shut_injector_defaults_the_control_mode() -> None:
+def test_shut_injector_keeps_its_control_mode_but_names_no_magnitude() -> None:
+    """У закрытого инъектора режим остаётся, величина -- нет.
+
+    Правило пересмотрено намеренно. Раньше режим у закрытой скважины тоже
+    уходил в дефолт, и это ломало настоящий прогон: OPM отвергает WCONINJE без
+    режима -- `Internal error: Unknown control mode string` -- тогда как
+    WCONPROD дефолтный режим принимает. Смысл проверки не изменился: мимо
+    MagnitudeResolver по-прежнему не проходит ни одно число, поэтому поле
+    величины остаётся дефолтным.
+    """
     line = _injector_line(_injector(status=WellStatus.SHUT, surface_rate=None, bhp_limit=None))
-    assert "'RATE'" not in line
     assert "'SHUT'" in line
+    assert "'RATE'" in line
+    assert line.split()[4] == "1*", line
 
 
 # --- TEST 5: SHUT_IN проходит компиляцию кандидата целиком ------------------
