@@ -19,7 +19,7 @@ from datetime import date
 import pytest
 
 from aios.newcase.calendar import REPAIRS, WellAvailabilityCalendar
-from aios.newcase.guardian import drop_unavailable_violations
+from aios.newcase.guardian import drop_non_flowing_violations
 from aios.newcase.policy import build_monthly_schedule
 
 ALL_WELLS = {r.well for r in REPAIRS}
@@ -91,7 +91,7 @@ def test_no_command_survives_anywhere_inside_the_repair(repair, schedule) -> Non
             assert all(c.well != repair.well for c in step.producers), (repair.well, step.date)
 
 
-# --- ось отчёта: END-stamp --------------------------------------------------
+# --- ось отчёта: признак работы берётся у симулятора ------------------------
 
 
 class _V:
@@ -101,35 +101,48 @@ class _V:
 
 @pytest.mark.parametrize("repair", REPAIRS, ids=lambda r: f"{r.well}@{r.shut}")
 def test_a_closed_well_is_not_failed_on_its_bottomhole_pressure(repair) -> None:
+    """Внутри ремонта дебита нет, значит предел давления неприменим."""
     inside = _V(_month_after(repair.shut), repair.well)
+    rates = {(inside.date, repair.well): -0.0}
 
-    assert drop_unavailable_violations((inside,), CALENDAR) == ()
+    assert drop_non_flowing_violations((inside,), rates) == ()
 
 
 @pytest.mark.parametrize("repair", REPAIRS, ids=lambda r: f"{r.well}@{r.back}")
-def test_the_row_stamped_on_the_return_date_still_belongs_to_the_repair(repair) -> None:
+def test_the_row_stamped_on_the_return_date_still_reports_no_flow(repair) -> None:
     """Строка на дату возврата описывает последний ремонтный месяц."""
     boundary = _V(repair.back, repair.well)
+    rates = {(boundary.date, repair.well): -0.0}
 
-    assert drop_unavailable_violations((boundary,), CALENDAR) == ()
+    assert drop_non_flowing_violations((boundary,), rates) == ()
 
 
 @pytest.mark.parametrize("repair", REPAIRS, ids=lambda r: f"{r.well}@{r.back}")
-def test_the_first_row_that_really_describes_work_is_judged(repair) -> None:
+def test_once_the_well_flows_again_it_is_judged(repair) -> None:
     working = _V(_month_after(repair.back), repair.well)
+    rates = {(working.date, repair.well): 100.0}
 
-    assert drop_unavailable_violations((working,), CALENDAR) == (working,)
+    assert drop_non_flowing_violations((working,), rates) == (working,)
 
 
 def test_another_well_is_never_suppressed_by_someone_elses_repair() -> None:
     other = _V(date(2013, 5, 1), "1")
+    rates = {(other.date, "1"): 32.98, ("2013-05-01", "40"): -0.0}
 
-    assert drop_unavailable_violations((other,), CALENDAR) == (other,)
+    assert drop_non_flowing_violations((other,), rates) == (other,)
 
 
-def test_the_two_axes_disagree_by_exactly_one_month_and_that_is_intended() -> None:
-    """Команда возвращается 2013-08-01; отчёт за тот же штамп -- ещё ремонт."""
+def test_a_well_with_no_reported_rate_is_still_judged() -> None:
+    """Молчание не повод снимать проверку."""
+    unknown = _V(date(2013, 5, 1), "7")
+
+    assert drop_non_flowing_violations((unknown,), {}) == (unknown,)
+
+
+def test_the_two_axes_stay_separate() -> None:
+    """Команда возвращается 2013-08-01; работы в том интервале ещё не было."""
     repair = next(r for r in REPAIRS if r.well == "40")
+    row = _V(repair.back, "40")
 
-    assert CALENDAR.is_available("40", repair.back)  # управление
-    assert drop_unavailable_violations((_V(repair.back, "40"),), CALENDAR) == ()  # отчёт
+    assert CALENDAR.is_available("40", repair.back)  # ось управления
+    assert drop_non_flowing_violations((row,), {(row.date, "40"): -0.0}) == ()  # ось отчёта

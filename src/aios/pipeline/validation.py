@@ -43,6 +43,7 @@ from aios.schedule.generator import (
     render_full_schedule,
     schedule_sha256,
 )
+from aios.schedule.horizon import extend_to_horizon
 from aios.schedule.policy import DEFAULT_POLICY_ID, Policy, get_policy
 from aios.schedule.state import FieldState, reconstruct_state
 from aios.schedule.validator import ScheduleValidationReport, validate_schedule
@@ -332,7 +333,15 @@ def read_baseline_inputs(case: Case) -> tuple[FieldState, Schedule, str, date]:
     start_date = parse_start_date(case.history.data_path.read_text(encoding="utf-8"))
     deck = parse_schedule_file(case.history.schedule_path, start_date=start_date)
     state = reconstruct_state(deck, case.management_start_date)
-    baseline = deck.control_schedule(case.management_start_date, case.management_end_date)
+    # Расписание колоды кончается там, где кончается выданная история. Если окно
+    # кейса длиннее, опорная сетка обрывается раньше срока и штатный контур не
+    # доходит до конца горизонта. Продление повторяет последнее управление и
+    # новых решений не принимает; когда сетка уже дошла до конца, объект
+    # возвращается тот же самый.
+    baseline = extend_to_horizon(
+        deck.control_schedule(case.management_start_date, case.management_end_date),
+        end=case.management_end_date,
+    )
     return state, baseline, deck.history_text(case.management_start_date), start_date
 
 

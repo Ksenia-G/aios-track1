@@ -478,6 +478,30 @@ def newcase_window_case(tmp_path: Path):
     return load_case(tmp_path / "case.json")
 
 
+@pytest.fixture
+def long_window_case(tmp_path: Path):
+    """Кейс, окно которого кончается ПОЗЖЕ расписания своей колоды.
+
+    Ровно та ситуация, из-за которой штатная сетка обрывалась: колода даёт
+    управление до апреля, а окно кейса просит до августа.
+    """
+    from aios.cases import load_case
+
+    deck = tmp_path / "deck"
+    (deck / "INCLUDE").mkdir(parents=True)
+    (deck / "MINI.DATA").write_text(MINI_DATA_DECK, encoding="utf-8")
+    (deck / "INCLUDE" / "SCH.INC").write_text(MINI_SCHEDULE, encoding="utf-8")
+    (deck / "INCLUDE" / "PHYSICS.INC").write_text(MINI_PHYSICS, encoding="utf-8")
+
+    payload = mini_case_payload()
+    payload["case_id"] = "long_window"
+    payload["management_end_date"] = "2020-08-01"
+    (tmp_path / "case.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return load_case(tmp_path / "case.json")
+
+
 # --- опорный кейс Model Y --------------------------------------------------
 
 

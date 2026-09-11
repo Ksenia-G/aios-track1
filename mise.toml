@@ -55,6 +55,11 @@ description = "Ход идущего прогона OPM по его журнал
 env = { PYTHONPATH = "src" }
 run = "uv run python -m aios.ui.progress"
 
+[tasks.newcase-run]
+description = "Новый кейс 2012-2018: штатный прогон через OPM, Guardian и ЧДД"
+env = { PYTHONPATH = "src" }
+run = "uv run python -m aios.newcase.runner --out artifacts/newcase --workspace artifacts/newcase-ws"
+
 [tasks.check]
 run = """
 uv run ruff format --check .

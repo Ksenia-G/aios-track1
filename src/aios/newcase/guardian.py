@@ -13,7 +13,11 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from aios.newcase.activity import is_flowing_producer
 from aios.newcase.capacity import FieldCapacity
+from aios.newcase.timeaxis import report_intervals
+
+_UNKNOWN = object()
 
 FIELD_LIQUID_MAX = "field_liquid_max"
 FIELD_INJECTION_MAX = "field_injection_max"
@@ -64,10 +68,22 @@ class FieldTrajectoryGuardian:
     def evaluate(
         self, trajectory: Iterable[tuple[date, float | None, float | None]]
     ) -> FieldTrajectoryReport:
+        """Судить КАЖДЫЙ отчётный интервал, а не каждую метку.
+
+        Строка датируется концом своего интервала, поэтому предел выбирается по
+        началу интервала. У первой строки предыдущей метки нет -- интервала она
+        не описывает и не судится.
+        """
+        rows = list(trajectory)
+        intervals = report_intervals([day for day, _l, _i in rows])
+        by_stamp = {interval.end: interval for interval in intervals}
         checks = 0
         violations: list[FieldViolation] = []
-        for day, liquid, injection in trajectory:
-            capacity = FieldCapacity.at(day)
+        for day, liquid, injection in rows:
+            interval = by_stamp.get(day)
+            if interval is None:
+                continue
+            capacity = FieldCapacity.for_report(interval)
             for value, limit, name in (
                 (liquid, capacity.liquid_max, FIELD_LIQUID_MAX),
                 (injection, capacity.injection_max, FIELD_INJECTION_MAX),
@@ -89,32 +105,24 @@ class FieldTrajectoryGuardian:
         )
 
 
-def drop_unavailable_violations(violations, calendar):
-    """Убрать замечания по скважинам, закрытым обязательным ремонтом.
+def drop_non_flowing_violations(violations, liquid_rates):
+    """Снять замечания по забойному давлению у НЕ работавших скважин.
 
-    Замороженный `ConstraintGuardian` судит каждую скважину на каждом отчётном
-    шаге и об обязательных ремонтах не знает: у закрытой скважины забойное
-    давление читается как 0 и выглядит нарушением предела 50 бар. Режима у неё
-    нет, ограничивать нечего -- замечание снимается здесь, а не правкой
-    замороженного файла. Снимается ровно оно: любое замечание вне окна ремонта
-    и по любой другой скважине остаётся на месте.
+    Признак берётся из состояния симулятора, а не из плана ремонта: закрытая
+    скважина сообщает нулевой дебит, и предел давления к ней неприменим. Так
+    закрывается любая фактически закрытая скважина, а не только заранее
+    известная, и ни одно замечание по работающей скважине не теряется.
+
+    ``liquid_rates`` -- реализованный дебит жидкости по ``(дата строки, скважина)``.
+    Скважина без записи считается работавшей: молчание не повод снимать проверку.
     """
     kept = []
     for violation in violations:
-        day = date.fromisoformat(str(violation.date))
-        well = str(violation.well_name)
-        # Отчётная строка датируется концом интервала, поэтому строка на дату
-        # возврата описывает ещё ремонтный месяц. Команда возвращается с даты
-        # возврата -- интервал доступности остаётся [shut, back).
-        judged = _previous_month(day)
-        if calendar.is_available(well, day) and calendar.is_available(well, judged):
+        key = (str(violation.date), str(violation.well_name))
+        rate = liquid_rates.get(key, _UNKNOWN)
+        if rate is _UNKNOWN or is_flowing_producer(liquid_rate=rate):
             kept.append(violation)
     return tuple(kept)
-
-
-def _previous_month(day: date) -> date:
-    year, month = (day.year - 1, 12) if day.month == 1 else (day.year, day.month - 1)
-    return date(year, month, 1)
 
 
 def trajectory_from_summary(
@@ -140,6 +148,6 @@ __all__ = [
     "FieldTrajectoryGuardian",
     "FieldTrajectoryReport",
     "FieldViolation",
-    "drop_unavailable_violations",
+    "drop_non_flowing_violations",
     "trajectory_from_summary",
 ]

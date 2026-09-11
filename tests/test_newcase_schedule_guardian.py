@@ -125,35 +125,64 @@ def test_injector_bhp_ceiling_is_written_on_every_open_injector() -> None:
 
 
 def test_guardian_passes_a_trajectory_inside_both_caps() -> None:
+    """Строка судится по своему интервалу, поэтому ей нужна предыдущая метка."""
     report = FieldTrajectoryGuardian().evaluate(
         [
+            (date(2013, 5, 1), 3700.0, 3800.0),
             (date(2013, 6, 1), 3800.0, 3900.0),
-            (date(2016, 6, 1), 6000.0, 7000.0),
+            (date(2013, 7, 1), 3900.0, 3950.0),
         ]
     )
 
     assert report.failed == 0
-    # 2013 даёт две проверки, 2016 ни одной: после снятия пределов проверять нечего.
-    assert report.checks == 2
+    # две строки описывают интервалы, каждый судится по двум пределам
+    assert report.checks == 4
 
 
 def test_guardian_rejects_realized_liquid_above_the_cap_before_2015() -> None:
-    report = FieldTrajectoryGuardian().evaluate([(date(2013, 6, 1), 4200.0, 100.0)])
+    report = FieldTrajectoryGuardian().evaluate(
+        [(date(2013, 5, 1), 100.0, 100.0), (date(2013, 6, 1), 4200.0, 100.0)]
+    )
 
     assert report.failed == 1
     assert report.violations[0].constraint == "field_liquid_max"
 
 
 def test_guardian_rejects_realized_injection_above_the_cap_before_2015() -> None:
-    report = FieldTrajectoryGuardian().evaluate([(date(2014, 12, 1), 100.0, 4500.0)])
+    report = FieldTrajectoryGuardian().evaluate(
+        [(date(2014, 11, 1), 100.0, 100.0), (date(2014, 12, 1), 100.0, 4500.0)]
+    )
 
     assert report.failed == 1
     assert report.violations[0].constraint == "field_injection_max"
 
 
 def test_guardian_does_not_apply_the_caps_after_they_are_released() -> None:
-    report = FieldTrajectoryGuardian().evaluate([(date(2015, 1, 1), 9000.0, 9000.0)])
+    """Операция января 2015 свободна; её строка датируется февралём."""
+    report = FieldTrajectoryGuardian().evaluate(
+        [(date(2015, 1, 1), 100.0, 100.0), (date(2015, 2, 1), 9000.0, 9000.0)]
+    )
 
+    assert report.failed == 0
+
+
+def test_guardian_still_caps_december_2014_reported_on_the_2015_stamp() -> None:
+    """Ровно тот off-by-one, ради которого ось времени вынесена отдельно."""
+    report = FieldTrajectoryGuardian().evaluate(
+        [(date(2014, 12, 1), 100.0, 100.0), (date(2015, 1, 1), 9000.0, 100.0)]
+    )
+
+    assert report.failed == 1
+    assert report.violations[0].constraint == "field_liquid_max"
+
+
+def test_guardian_never_caps_a_historical_interval() -> None:
+    """Строка на 2012-01-01 описывает декабрь 2011: новый предел её не судит."""
+    report = FieldTrajectoryGuardian().evaluate(
+        [(date(2011, 12, 1), 9000.0, 9000.0), (date(2012, 1, 1), 9000.0, 9000.0)]
+    )
+
+    assert report.checks == 0
     assert report.failed == 0
 
 
@@ -229,48 +258,25 @@ def test_a_returned_well_is_reopened_with_welopen_and_a_control_line(newcase_win
 # --- закрытая на ремонт скважина не судится по забойному давлению ------------
 
 
-def test_a_forced_shut_well_is_not_judged_by_its_bottomhole_pressure() -> None:
-    """У закрытой скважины WBHP = 0; это не нарушение предела, а отсутствие режима.
-
-    Официальный ConstraintGuardian заморожен и об обязательных ремонтах не
-    знает, поэтому отбор таких проверок делается здесь, на слое нового кейса.
-    """
-    from aios.newcase.guardian import drop_unavailable_violations
+def test_a_non_flowing_well_is_not_judged_by_its_bottomhole_pressure() -> None:
+    """Признак -- реализованный дебит, а не план ремонта."""
+    from aios.newcase.guardian import drop_non_flowing_violations
 
     class _V:
         def __init__(self, day, well, constraint):
             self.date, self.well_name, self.constraint = day, well, constraint
 
     violations = (
-        _V("2013-05-01", "40", "producer_bhp_min"),  # 40 в ремонте
-        _V("2013-09-01", "40", "producer_bhp_min"),  # 40 уже вернулась
-        _V("2013-05-01", "1", "producer_bhp_min"),  # другая скважина
+        _V("2013-05-01", "40", "producer_bhp_min"),
+        _V("2013-09-01", "40", "producer_bhp_min"),
+        _V("2013-05-01", "1", "producer_bhp_min"),
     )
+    rates = {
+        ("2013-05-01", "40"): -0.0,
+        ("2013-09-01", "40"): 100.0,
+        ("2013-05-01", "1"): 32.98,
+    }
 
-    kept = drop_unavailable_violations(violations, WellAvailabilityCalendar())
+    kept = drop_non_flowing_violations(violations, rates)
 
     assert [(v.well_name, v.date) for v in kept] == [("40", "2013-09-01"), ("1", "2013-05-01")]
-
-
-def test_the_report_stamped_on_the_return_date_still_describes_the_repair() -> None:
-    """Отчётная строка датируется КОНЦОМ интервала (см. docs/CHDD END-stamp).
-
-    Поэтому строка на дату возврата описывает месяц, который скважина ещё
-    простояла в ремонте, и нулевое забойное давление в ней -- то же отсутствие
-    режима, а не нарушение. Команда при этом возвращается именно с даты
-    возврата: интервал доступности остаётся [shut, back).
-    """
-    from aios.newcase.guardian import drop_unavailable_violations
-
-    class _V:
-        def __init__(self, day, well, constraint):
-            self.date, self.well_name, self.constraint = day, well, constraint
-
-    violations = (
-        _V("2013-08-01", "40", "producer_bhp_min"),  # интервал июля: ещё ремонт
-        _V("2013-09-01", "40", "producer_bhp_min"),  # интервал августа: уже работа
-    )
-
-    kept = drop_unavailable_violations(violations, WellAvailabilityCalendar())
-
-    assert [v.date for v in kept] == ["2013-09-01"]
